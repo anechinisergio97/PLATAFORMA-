@@ -62,6 +62,7 @@
     grid-template-columns:repeat(5, minmax(230px, 1fr));
     gap:12px;
     overflow-x:auto;
+    transition:opacity .2s;
   }
   @media (max-width: 1200px){ .board{grid-template-columns:repeat(5, minmax(230px, 1fr)); } .wrap{overflow-x:auto;} }
   @media (max-width: 700px){ .board{grid-template-columns:1fr;} }
@@ -160,6 +161,10 @@
   }
   .btn-add-forn:hover{color:var(--text); border-color:var(--accent-dim);}
   .saving-hint{font-size:11px; color:var(--ok); margin-top:4px;}
+  .sync-dot{display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:5px; vertical-align:middle;}
+  .sync-dot.online{background:var(--ok);}
+  .sync-dot.offline{background:var(--danger);}
+  .sync-dot.loading{background:var(--warn);}
 </style>
 </head>
 <body>
@@ -168,7 +173,7 @@
     <div class="title-block">
       <div class="eyebrow">Compras · Fornecedores</div>
       <h1>Painel de Cotações</h1>
-      <div id="storage-notice" style="font-size:11px; color:var(--muted); margin-top:6px;"></div>
+      <div id="storage-notice" style="font-size:11px; color:var(--muted); margin-top:6px;"><span class="sync-dot loading" id="sync-dot"></span>Conectando...</div>
     </div>
     <div class="stats" id="stats"></div>
   </header>
@@ -236,96 +241,82 @@
   </div>
 </div>
 
-<script>
-const STORAGE_KEY = 'cotacoes-board-v2';
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getFirestore, doc, onSnapshot, setDoc
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCFxNa7Dn8erGgLOe3MeVPUiCPDQ8ZmTgI",
+  authDomain: "painel-cotacoes.firebaseapp.com",
+  projectId: "painel-cotacoes",
+  storageBucket: "painel-cotacoes.firebasestorage.app",
+  messagingSenderId: "723707624476",
+  appId: "1:723707624476:web:a9e24ec5310110383b33d9"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const boardRef = doc(db, "painel", "cotacoes-board");
+
+const STORAGE_KEY_LOCAL = 'cotacoes-board-v2';
 let cotacoes = [];
 let draggedId = null;
 let editingId = null;
 let fornRows = [];
+let applyingRemote = false;
 
 function uid(p){ return (p||'c') + Date.now() + Math.floor(Math.random()*1000); }
 
-let storageReady = false;
-let usingCloud = false;
-
-async function loadData(){
-  const boardEl = document.getElementById('board');
-  boardEl.style.opacity = '0.5';
-  if(window.storage && typeof window.storage.get === 'function'){
-    try{
-      const res = await window.storage.get(STORAGE_KEY, true);
-      cotacoes = res ? JSON.parse(res.value) : [];
-      usingCloud = true;
-    }catch(e){
-      cotacoes = [];
-      usingCloud = true;
-    }
-  } else {
-    try{
-      const raw = localStorage.getItem(STORAGE_KEY);
-      cotacoes = raw ? JSON.parse(raw) : [];
-    }catch(e){
-      cotacoes = [];
-    }
-    usingCloud = false;
-  }
-  storageReady = true;
-  boardEl.style.opacity = '1';
-  updateStorageNotice();
-  render();
+function setSyncStatus(status){
+  const dot = document.getElementById('sync-dot');
+  const notice = document.getElementById('storage-notice');
+  dot.className = 'sync-dot ' + status;
+  const label = status === 'online'
+    ? 'Sincronizado na nuvem — em tempo real com quem mais acessar este link'
+    : status === 'offline'
+      ? 'Sem conexão com a nuvem — salvando só neste navegador'
+      : 'Conectando à nuvem...';
+  notice.innerHTML = '';
+  notice.appendChild(dot);
+  notice.appendChild(document.createTextNode(label));
 }
+
+// Realtime listener: qualquer mudança no Firestore atualiza a tela na hora
+onSnapshot(boardRef, (snap) => {
+  setSyncStatus('online');
+  if(snap.exists()){
+    const data = snap.data();
+    applyingRemote = true;
+    cotacoes = data.cotacoes || [];
+    render();
+    applyingRemote = false;
+  } else {
+    // documento ainda não existe — cria vazio
+    cotacoes = [];
+    render();
+  }
+}, (err) => {
+  console.error('Erro de sincronização', err);
+  setSyncStatus('offline');
+  // fallback local
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY_LOCAL);
+    cotacoes = raw ? JSON.parse(raw) : [];
+  }catch(e){ cotacoes = []; }
+  render();
+});
 
 async function saveData(){
-  if(usingCloud){
-    try{
-      await window.storage.set(STORAGE_KEY, JSON.stringify(cotacoes), true);
-    }catch(e){
-      console.error('Erro ao salvar na nuvem', e);
-    }
-  } else {
-    try{
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(cotacoes));
-    }catch(e){
-      console.error('Erro ao salvar localmente', e);
-    }
+  if(applyingRemote) return;
+  try{
+    await setDoc(boardRef, { cotacoes });
+  }catch(e){
+    console.error('Erro ao salvar na nuvem, salvando localmente', e);
+    setSyncStatus('offline');
+    try{ localStorage.setItem(STORAGE_KEY_LOCAL, JSON.stringify(cotacoes)); }catch(err){}
   }
-}
-
-function updateStorageNotice(){
-  const el = document.getElementById('storage-notice');
-  if(!el) return;
-  el.textContent = usingCloud
-    ? '🔄 Dados sincronizados na nuvem — visíveis a qualquer pessoa que abrir este link'
-    : '💾 Dados salvos neste arquivo/navegador — use Exportar antes de trocar de versão do arquivo';
-}
-
-function exportData(){
-  const blob = new Blob([JSON.stringify(cotacoes, null, 2)], {type:'application/json'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'cotacoes-backup.json';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
-function importData(file){
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    try{
-      const imported = JSON.parse(e.target.result);
-      if(!Array.isArray(imported)) throw new Error('formato inválido');
-      cotacoes = imported;
-      saveData();
-      render();
-      alert('Dados importados com sucesso!');
-    }catch(err){
-      alert('Não consegui ler esse arquivo. Confirme que é um backup exportado daqui mesmo.');
-    }
-  };
-  reader.readAsText(file);
 }
 
 function formatDate(d){
@@ -438,7 +429,6 @@ function render(){
       const id = btn.dataset.id;
       cotacoes = cotacoes.filter(c => c.id !== id);
       saveData();
-      render();
     });
   });
   document.querySelectorAll('.edit').forEach(btn => {
@@ -494,7 +484,6 @@ document.querySelectorAll('.col').forEach(col => {
     if(c){
       c.status = status;
       saveData();
-      render();
     }
     draggedId = null;
   });
@@ -602,29 +591,48 @@ document.getElementById('btn-save').addEventListener('click', () => {
     });
   }
   saveData();
-  render();
   overlay.classList.remove('open');
 });
 
-document.getElementById('btn-export').addEventListener('click', exportData);
+document.getElementById('btn-export').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(cotacoes, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'cotacoes-backup.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
 document.getElementById('btn-import').addEventListener('click', () => {
   document.getElementById('input-import').click();
 });
 document.getElementById('input-import').addEventListener('change', (e) => {
   const file = e.target.files[0];
-  if(file) importData(file);
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try{
+      const imported = JSON.parse(ev.target.result);
+      if(!Array.isArray(imported)) throw new Error('formato inválido');
+      cotacoes = imported;
+      saveData();
+      alert('Dados importados com sucesso!');
+    }catch(err){
+      alert('Não consegui ler esse arquivo. Confirme que é um backup exportado daqui mesmo.');
+    }
+  };
+  reader.readAsText(file);
   e.target.value = '';
 });
 
 document.getElementById('btn-reset').addEventListener('click', () => {
-  if(confirm('Tem certeza que quer apagar todas as cotações?')){
+  if(confirm('Tem certeza que quer apagar todas as cotações? Isso apaga para todo mundo que usa este painel.')){
     cotacoes = [];
     saveData();
-    render();
   }
 });
-
-loadData();
 </script>
 </body>
 </html>
