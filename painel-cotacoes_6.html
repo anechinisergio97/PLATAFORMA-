@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel de Cotações</title>
+<style>
+  :root{
+    --bg:#101511;
+    --panel:#161d18;
+    --panel-2:#1c241e;
+    --panel-3:#20291f;
+    --line:#2a342c;
+    --text:#eef2ea;
+    --muted:#93a396;
+    --accent:#c8ff4d;
+    --accent-dim:#8fb536;
+    --warn:#ffb347;
+    --danger:#ff6b5e;
+    --ok:#5fe3a3;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Segoe UI', ui-sans-serif, system-ui, -apple-system, sans-serif;
+    min-height:100vh;
+    padding:28px 20px 60px;
+  }
+  .wrap{max-width:1600px; margin:0 auto;}
+  header{
+    display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:16px;
+    margin-bottom:26px; padding-bottom:18px; border-bottom:1px solid var(--line);
+  }
+  .title-block .eyebrow{
+    font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--accent-dim); font-weight:700;
+  }
+  h1{
+    font-family:Georgia, 'Times New Roman', serif;
+    font-size:32px; margin:4px 0 0; font-weight:600; letter-spacing:-.01em;
+  }
+  .stats{display:flex; gap:22px; flex-wrap:wrap;}
+  .stat{text-align:right;}
+  .stat .num{font-size:22px; font-weight:700; font-family:Georgia, serif;}
+  .stat .num.saving{color:var(--ok);}
+  .stat .lbl{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em;}
+  .toolbar{display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap; align-items:center;}
+  button.primary{
+    background:var(--accent); color:#0c1210; border:none; padding:10px 18px; border-radius:8px;
+    font-weight:700; cursor:pointer; font-size:14px;
+  }
+  button.primary:hover{background:#d9ff7a;}
+  button.ghost{
+    background:transparent; color:var(--muted); border:1px solid var(--line); padding:9px 14px; border-radius:8px;
+    cursor:pointer; font-size:13px;
+  }
+  button.ghost:hover{color:var(--text); border-color:var(--muted);}
+  .board{
+    display:grid;
+    grid-template-columns:repeat(5, minmax(230px, 1fr));
+    gap:12px;
+    overflow-x:auto;
+  }
+  @media (max-width: 1200px){ .board{grid-template-columns:repeat(5, minmax(230px, 1fr)); } .wrap{overflow-x:auto;} }
+  @media (max-width: 700px){ .board{grid-template-columns:1fr;} }
+  .col{
+    background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+    min-height:200px; display:flex; flex-direction:column;
+  }
+  .col-head{
+    padding:14px 14px; display:flex; justify-content:space-between; align-items:center;
+    border-bottom:1px solid var(--line);
+  }
+  .col-head .name{font-weight:700; font-size:12px; text-transform:uppercase; letter-spacing:.05em;}
+  .col-head .count{
+    background:var(--panel-2); color:var(--muted); font-size:11px; padding:2px 8px; border-radius:20px;
+  }
+  .col[data-status="enviada"] .col-head .name{color:#9fc2ff;}
+  .col[data-status="analise"] .col-head .name{color:var(--warn);}
+  .col[data-status="finalizacao"] .col-head .name{color:#c9a8ff;}
+  .col[data-status="aprovada"] .col-head .name{color:var(--ok);}
+  .col[data-status="perdida"] .col-head .name{color:var(--danger);}
+  .col-body{padding:10px; display:flex; flex-direction:column; gap:10px; flex:1; min-height:80px;}
+  .card{
+    background:var(--panel-2); border:1px solid var(--line); border-radius:8px; padding:12px;
+    cursor:grab; position:relative; transition:border-color .15s;
+  }
+  .card:hover{border-color:var(--accent-dim);}
+  .card.dragging{opacity:.4;}
+  .card .produto{font-weight:700; font-size:14.5px; margin-bottom:8px; padding-right:44px;}
+  .card .fornecedores{display:flex; flex-direction:column; gap:5px; margin-bottom:8px;}
+  .forn-row{
+    display:flex; justify-content:space-between; align-items:baseline; gap:8px;
+    font-size:12px; padding:4px 7px; border-radius:5px; background:var(--panel-3);
+  }
+  .forn-row.fechado{outline:1px solid var(--ok);}
+  .forn-row.menor .forn-preco{color:var(--accent);}
+  .forn-nome{color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .forn-tag{font-size:9px; color:var(--ok); font-weight:700; text-transform:uppercase; margin-left:5px;}
+  .forn-preco{color:var(--muted); font-weight:700; white-space:nowrap;}
+  .forn-cond{font-size:10.5px; color:var(--muted); padding:0 7px; margin-top:-3px; margin-bottom:2px;}
+  .card .meta{display:flex; justify-content:space-between; align-items:center; font-size:11px; margin-top:6px;}
+  .card .prazo{color:var(--muted);}
+  .card .prazo.late{color:var(--danger); font-weight:700;}
+  .card .saving-badge{
+    display:inline-block; background:rgba(95,227,163,.15); color:var(--ok); font-size:11px;
+    font-weight:700; padding:3px 8px; border-radius:6px; margin-top:6px;
+  }
+  .card .actions{position:absolute; top:8px; right:8px; display:flex; gap:2px;}
+  .card .actions button{
+    background:none; border:none; color:var(--muted); cursor:pointer; font-size:14px; padding:2px 5px; line-height:1;
+  }
+  .card .actions button:hover{color:var(--text);}
+  .card .actions .del:hover{color:var(--danger);}
+  .empty-hint{color:var(--muted); font-size:12px; text-align:center; padding:20px 10px; opacity:.6;}
+  .drop-zone{outline:2px dashed var(--accent-dim); outline-offset:-4px; border-radius:8px;}
+
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(6,8,6,.7); display:none; align-items:center; justify-content:center;
+    z-index:100; padding:20px; overflow-y:auto;
+  }
+  .modal-overlay.open{display:flex;}
+  .modal{
+    background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:24px;
+    width:100%; max-width:520px; max-height:90vh; overflow-y:auto;
+  }
+  .modal h2{margin:0 0 18px; font-family:Georgia, serif; font-size:20px;}
+  .field{margin-bottom:14px;}
+  .field label{display:block; font-size:12px; color:var(--muted); margin-bottom:5px; text-transform:uppercase; letter-spacing:.05em;}
+  .field input, .field textarea{
+    width:100%; background:var(--bg); border:1px solid var(--line); color:var(--text);
+    padding:9px 10px; border-radius:6px; font-size:14px; font-family:inherit;
+  }
+  .field input:focus, .field textarea:focus{outline:none; border-color:var(--accent-dim);}
+  .field textarea{resize:vertical; min-height:40px;}
+  .modal-actions{display:flex; justify-content:flex-end; gap:10px; margin-top:20px;}
+
+  .fornecedores-section{border-top:1px solid var(--line); padding-top:14px; margin-top:4px;}
+  .fornecedores-section > label{display:block; font-size:12px; color:var(--muted); margin-bottom:10px; text-transform:uppercase; letter-spacing:.05em;}
+  .forn-edit-row{
+    background:var(--panel-2); border:1px solid var(--line); border-radius:8px; padding:10px; margin-bottom:8px;
+    position:relative;
+  }
+  .forn-edit-row .grid2{display:grid; grid-template-columns:1fr 110px; gap:8px; margin-bottom:6px;}
+  .forn-edit-row input[type="text"], .forn-edit-row textarea{
+    width:100%; background:var(--bg); border:1px solid var(--line); color:var(--text);
+    padding:7px 8px; border-radius:6px; font-size:13px; font-family:inherit;
+  }
+  .forn-edit-row textarea{min-height:32px; resize:vertical;}
+  .forn-edit-row .row-bottom{display:flex; justify-content:space-between; align-items:center; margin-top:6px;}
+  .forn-edit-row .fechado-toggle{display:flex; align-items:center; gap:6px; font-size:11.5px; color:var(--muted); cursor:pointer;}
+  .forn-edit-row .fechado-toggle input{width:14px; height:14px;}
+  .forn-edit-row .remove-forn{background:none; border:none; color:var(--muted); cursor:pointer; font-size:13px;}
+  .forn-edit-row .remove-forn:hover{color:var(--danger);}
+  .btn-add-forn{
+    background:var(--panel-3); border:1px dashed var(--line); color:var(--muted); width:100%;
+    padding:8px; border-radius:6px; cursor:pointer; font-size:12.5px; margin-top:2px;
+  }
+  .btn-add-forn:hover{color:var(--text); border-color:var(--accent-dim);}
+  .saving-hint{font-size:11px; color:var(--ok); margin-top:4px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="title-block">
+      <div class="eyebrow">Compras · Fornecedores</div>
+      <h1>Painel de Cotações</h1>
+      <div id="storage-notice" style="font-size:11px; color:var(--muted); margin-top:6px;"></div>
+    </div>
+    <div class="stats" id="stats"></div>
+  </header>
+
+  <div class="toolbar">
+    <button class="primary" id="btn-new">+ Nova cotação</button>
+    <button class="ghost" id="btn-export">⬇ Exportar dados</button>
+    <button class="ghost" id="btn-import">⬆ Importar dados</button>
+    <input type="file" id="input-import" accept="application/json" style="display:none;">
+    <button class="ghost" id="btn-reset">Limpar tudo</button>
+  </div>
+
+  <div class="board" id="board">
+    <div class="col" data-status="enviada">
+      <div class="col-head"><span class="name">Enviada</span><span class="count" id="count-enviada">0</span></div>
+      <div class="col-body" id="body-enviada"></div>
+    </div>
+    <div class="col" data-status="analise">
+      <div class="col-head"><span class="name">Em análise</span><span class="count" id="count-analise">0</span></div>
+      <div class="col-body" id="body-analise"></div>
+    </div>
+    <div class="col" data-status="finalizacao">
+      <div class="col-head"><span class="name">Finalização</span><span class="count" id="count-finalizacao">0</span></div>
+      <div class="col-body" id="body-finalizacao"></div>
+    </div>
+    <div class="col" data-status="aprovada">
+      <div class="col-head"><span class="name">Aprovada</span><span class="count" id="count-aprovada">0</span></div>
+      <div class="col-body" id="body-aprovada"></div>
+    </div>
+    <div class="col" data-status="perdida">
+      <div class="col-head"><span class="name">Perdida / Recusada</span><span class="count" id="count-perdida">0</span></div>
+      <div class="col-body" id="body-perdida"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal">
+    <h2 id="modal-title">Nova cotação</h2>
+    <div class="field">
+      <label>Produto</label>
+      <input type="text" id="f-produto" placeholder="Ex: Defensivo X 200L">
+    </div>
+    <div class="field">
+      <label>Prazo de resposta</label>
+      <input type="date" id="f-prazo">
+    </div>
+
+    <div class="fornecedores-section">
+      <label>Fornecedores e condições</label>
+      <div id="forn-list"></div>
+      <button type="button" class="btn-add-forn" id="btn-add-forn">+ Adicionar fornecedor</button>
+    </div>
+
+    <div class="field" style="margin-top:14px;">
+      <label>Preço final negociado (opcional)</label>
+      <input type="text" id="f-preco-negociado" placeholder="Preencha se conseguiu melhorar o preço do fornecedor fechado">
+      <div class="saving-hint" id="saving-hint"></div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="ghost" id="btn-cancel">Cancelar</button>
+      <button class="primary" id="btn-save">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY = 'cotacoes-board-v2';
+let cotacoes = [];
+let draggedId = null;
+let editingId = null;
+let fornRows = [];
+
+function uid(p){ return (p||'c') + Date.now() + Math.floor(Math.random()*1000); }
+
+let storageReady = false;
+let usingCloud = false;
+
+async function loadData(){
+  const boardEl = document.getElementById('board');
+  boardEl.style.opacity = '0.5';
+  if(window.storage && typeof window.storage.get === 'function'){
+    try{
+      const res = await window.storage.get(STORAGE_KEY, true);
+      cotacoes = res ? JSON.parse(res.value) : [];
+      usingCloud = true;
+    }catch(e){
+      cotacoes = [];
+      usingCloud = true;
+    }
+  } else {
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      cotacoes = raw ? JSON.parse(raw) : [];
+    }catch(e){
+      cotacoes = [];
+    }
+    usingCloud = false;
+  }
+  storageReady = true;
+  boardEl.style.opacity = '1';
+  updateStorageNotice();
+  render();
+}
+
+async function saveData(){
+  if(usingCloud){
+    try{
+      await window.storage.set(STORAGE_KEY, JSON.stringify(cotacoes), true);
+    }catch(e){
+      console.error('Erro ao salvar na nuvem', e);
+    }
+  } else {
+    try{
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(cotacoes));
+    }catch(e){
+      console.error('Erro ao salvar localmente', e);
+    }
+  }
+}
+
+function updateStorageNotice(){
+  const el = document.getElementById('storage-notice');
+  if(!el) return;
+  el.textContent = usingCloud
+    ? '🔄 Dados sincronizados na nuvem — visíveis a qualquer pessoa que abrir este link'
+    : '💾 Dados salvos neste arquivo/navegador — use Exportar antes de trocar de versão do arquivo';
+}
+
+function exportData(){
+  const blob = new Blob([JSON.stringify(cotacoes, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'cotacoes-backup.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function importData(file){
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try{
+      const imported = JSON.parse(e.target.result);
+      if(!Array.isArray(imported)) throw new Error('formato inválido');
+      cotacoes = imported;
+      saveData();
+      render();
+      alert('Dados importados com sucesso!');
+    }catch(err){
+      alert('Não consegui ler esse arquivo. Confirme que é um backup exportado daqui mesmo.');
+    }
+  };
+  reader.readAsText(file);
+}
+
+function formatDate(d){
+  if(!d) return '';
+  const [y,m,day] = d.split('-');
+  return `${day}/${m}`;
+}
+
+function isLate(d){
+  if(!d) return false;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const target = new Date(d + 'T00:00:00');
+  return target < today;
+}
+
+function parsePrice(str){
+  if(!str) return null;
+  let s = String(str).replace(/[^\d,.-]/g, '');
+  if(s.indexOf(',') > -1 && s.indexOf('.') > -1){
+    s = s.replace(/\./g, '').replace(',', '.');
+  } else if(s.indexOf(',') > -1){
+    s = s.replace(',', '.');
+  }
+  const n = parseFloat(s);
+  return isNaN(n) ? null : n;
+}
+
+function formatMoney(n){
+  return n.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+function escapeHtml(s){
+  if(!s) return '';
+  return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+function render(){
+  const statuses = ['enviada','analise','finalizacao','aprovada','perdida'];
+  statuses.forEach(s => {
+    const body = document.getElementById('body-' + s);
+    body.innerHTML = '';
+    const items = cotacoes.filter(c => c.status === s);
+    document.getElementById('count-' + s).textContent = items.length;
+    if(items.length === 0){
+      body.innerHTML = '<div class="empty-hint">Arraste cotações para cá</div>';
+      return;
+    }
+    items.forEach(c => {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.draggable = true;
+      card.dataset.id = c.id;
+
+      const fornecedores = c.fornecedores || [];
+      const precos = fornecedores.map(f => parsePrice(f.preco)).filter(v => v !== null);
+      const menorPreco = precos.length ? Math.min(...precos) : null;
+      const fechado = fornecedores.find(f => f.fechado);
+
+      let fornHtml = '';
+      fornecedores.forEach(f => {
+        const p = parsePrice(f.preco);
+        const isMenor = menorPreco !== null && p === menorPreco;
+        fornHtml += `<div class="forn-row ${f.fechado ? 'fechado' : ''} ${isMenor ? 'menor' : ''}">
+          <span class="forn-nome">${escapeHtml(f.nome)}${f.fechado ? '<span class="forn-tag">Fechado</span>' : ''}</span>
+          <span class="forn-preco">${f.preco ? 'R$ ' + escapeHtml(f.preco) : '—'}</span>
+        </div>`;
+        if(f.condicoes){
+          fornHtml += `<div class="forn-cond">${escapeHtml(f.condicoes)}</div>`;
+        }
+      });
+
+      let savingHtml = '';
+      if(fechado && c.precoNegociado){
+        const fechadoP = parsePrice(fechado.preco);
+        const negP = parsePrice(c.precoNegociado);
+        if(fechadoP !== null && negP !== null && negP < fechadoP){
+          savingHtml = `<div class="saving-badge">Economia de R$ ${formatMoney(fechadoP - negP)}</div>`;
+        }
+      }
+
+      const late = c.status !== 'aprovada' && c.status !== 'perdida' && isLate(c.prazo);
+
+      card.innerHTML = `
+        <div class="actions">
+          <button class="edit" data-id="${c.id}" title="Editar">✎</button>
+          <button class="del" data-id="${c.id}" title="Excluir">×</button>
+        </div>
+        <div class="produto">${escapeHtml(c.produto)}</div>
+        <div class="fornecedores">${fornHtml}</div>
+        ${savingHtml}
+        <div class="meta">
+          <span></span>
+          <span class="prazo ${late ? 'late' : ''}">${c.prazo ? (late ? 'Atrasado ' : '') + formatDate(c.prazo) : ''}</span>
+        </div>
+      `;
+      card.addEventListener('dragstart', () => {
+        draggedId = c.id;
+        card.classList.add('dragging');
+      });
+      card.addEventListener('dragend', () => {
+        card.classList.remove('dragging');
+      });
+      body.appendChild(card);
+    });
+  });
+
+  document.querySelectorAll('.del').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.id;
+      cotacoes = cotacoes.filter(c => c.id !== id);
+      saveData();
+      render();
+    });
+  });
+  document.querySelectorAll('.edit').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openModal(btn.dataset.id);
+    });
+  });
+
+  renderStats();
+}
+
+function renderStats(){
+  const statsEl = document.getElementById('stats');
+  const total = cotacoes.length;
+  const aprovadas = cotacoes.filter(c => c.status === 'aprovada').length;
+  const abertas = cotacoes.filter(c => c.status === 'enviada' || c.status === 'analise' || c.status === 'finalizacao').length;
+
+  let economiaTotal = 0;
+  cotacoes.forEach(c => {
+    const fechado = (c.fornecedores || []).find(f => f.fechado);
+    if(fechado && c.precoNegociado){
+      const fechadoP = parsePrice(fechado.preco);
+      const negP = parsePrice(c.precoNegociado);
+      if(fechadoP !== null && negP !== null && negP < fechadoP){
+        economiaTotal += (fechadoP - negP);
+      }
+    }
+  });
+
+  statsEl.innerHTML = `
+    <div class="stat"><div class="num">${total}</div><div class="lbl">Total</div></div>
+    <div class="stat"><div class="num">${abertas}</div><div class="lbl">Em aberto</div></div>
+    <div class="stat"><div class="num">${aprovadas}</div><div class="lbl">Aprovadas</div></div>
+    <div class="stat"><div class="num saving">R$ ${formatMoney(economiaTotal)}</div><div class="lbl">Economia gerada</div></div>
+  `;
+}
+
+document.querySelectorAll('.col').forEach(col => {
+  col.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    col.classList.add('drop-zone');
+  });
+  col.addEventListener('dragleave', () => {
+    col.classList.remove('drop-zone');
+  });
+  col.addEventListener('drop', (e) => {
+    e.preventDefault();
+    col.classList.remove('drop-zone');
+    if(!draggedId) return;
+    const status = col.dataset.status;
+    const c = cotacoes.find(x => x.id === draggedId);
+    if(c){
+      c.status = status;
+      saveData();
+      render();
+    }
+    draggedId = null;
+  });
+});
+
+// ---- Modal / form handling ----
+const overlay = document.getElementById('modal-overlay');
+const fornListEl = document.getElementById('forn-list');
+
+function renderFornRows(){
+  fornListEl.innerHTML = '';
+  fornRows.forEach((row, idx) => {
+    const div = document.createElement('div');
+    div.className = 'forn-edit-row';
+    div.innerHTML = `
+      <div class="grid2">
+        <input type="text" placeholder="Fornecedor" class="forn-nome-input" value="${escapeHtml(row.nome)}">
+        <input type="text" placeholder="Preço R$" class="forn-preco-input" value="${escapeHtml(row.preco)}">
+      </div>
+      <textarea placeholder="Condições (prazo de pagamento, entrega, etc.)" class="forn-cond-input">${escapeHtml(row.condicoes)}</textarea>
+      <div class="row-bottom">
+        <label class="fechado-toggle">
+          <input type="checkbox" class="forn-fechado-input" ${row.fechado ? 'checked' : ''}>
+          Fornecedor fechado
+        </label>
+        <button type="button" class="remove-forn" data-idx="${idx}">Remover</button>
+      </div>
+    `;
+    div.querySelector('.forn-nome-input').addEventListener('input', (e) => row.nome = e.target.value);
+    div.querySelector('.forn-preco-input').addEventListener('input', (e) => row.preco = e.target.value);
+    div.querySelector('.forn-cond-input').addEventListener('input', (e) => row.condicoes = e.target.value);
+    div.querySelector('.forn-fechado-input').addEventListener('change', (e) => {
+      fornRows.forEach(r => r.fechado = false);
+      row.fechado = e.target.checked;
+      renderFornRows();
+    });
+    div.querySelector('.remove-forn').addEventListener('click', () => {
+      fornRows.splice(idx, 1);
+      renderFornRows();
+    });
+    fornListEl.appendChild(div);
+  });
+}
+
+document.getElementById('btn-add-forn').addEventListener('click', () => {
+  fornRows.push({nome:'', preco:'', condicoes:'', fechado:false});
+  renderFornRows();
+});
+
+function openModal(id){
+  editingId = id || null;
+  const c = id ? cotacoes.find(x => x.id === id) : null;
+  document.getElementById('modal-title').textContent = c ? 'Editar cotação' : 'Nova cotação';
+  document.getElementById('f-produto').value = c ? c.produto : '';
+  document.getElementById('f-prazo').value = c ? (c.prazo || '') : '';
+  document.getElementById('f-preco-negociado').value = c ? (c.precoNegociado || '') : '';
+  fornRows = c && c.fornecedores && c.fornecedores.length
+    ? c.fornecedores.map(f => ({...f}))
+    : [{nome:'', preco:'', condicoes:'', fechado:false}];
+  renderFornRows();
+  overlay.classList.add('open');
+}
+
+document.getElementById('btn-new').addEventListener('click', () => openModal(null));
+document.getElementById('btn-cancel').addEventListener('click', () => {
+  overlay.classList.remove('open');
+});
+overlay.addEventListener('click', (e) => {
+  if(e.target === overlay) overlay.classList.remove('open');
+});
+
+document.getElementById('btn-save').addEventListener('click', () => {
+  const produto = document.getElementById('f-produto').value.trim();
+  if(!produto){
+    document.getElementById('f-produto').focus();
+    return;
+  }
+  const fornecedores = fornRows
+    .filter(f => f.nome && f.nome.trim())
+    .map(f => ({
+      id: f.id || uid('f'),
+      nome: f.nome.trim(),
+      preco: (f.preco || '').trim(),
+      condicoes: (f.condicoes || '').trim(),
+      fechado: !!f.fechado
+    }));
+
+  const prazo = document.getElementById('f-prazo').value;
+  const precoNegociado = document.getElementById('f-preco-negociado').value.trim();
+
+  if(editingId){
+    const c = cotacoes.find(x => x.id === editingId);
+    c.produto = produto;
+    c.prazo = prazo;
+    c.fornecedores = fornecedores;
+    c.precoNegociado = precoNegociado;
+  } else {
+    cotacoes.push({
+      id: uid(),
+      produto,
+      prazo,
+      fornecedores,
+      precoNegociado,
+      status: 'enviada'
+    });
+  }
+  saveData();
+  render();
+  overlay.classList.remove('open');
+});
+
+document.getElementById('btn-export').addEventListener('click', exportData);
+document.getElementById('btn-import').addEventListener('click', () => {
+  document.getElementById('input-import').click();
+});
+document.getElementById('input-import').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if(file) importData(file);
+  e.target.value = '';
+});
+
+document.getElementById('btn-reset').addEventListener('click', () => {
+  if(confirm('Tem certeza que quer apagar todas as cotações?')){
+    cotacoes = [];
+    saveData();
+    render();
+  }
+});
+
+loadData();
+</script>
+</body>
+</html>
