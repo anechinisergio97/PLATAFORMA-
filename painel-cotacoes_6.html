@@ -165,6 +165,33 @@
   .sync-dot.online{background:var(--ok);}
   .sync-dot.offline{background:var(--danger);}
   .sync-dot.loading{background:var(--warn);}
+  .stat.excel-input{text-align:right; position:relative;}
+  .stat.excel-input input{
+    background:var(--panel-2); border:1px solid var(--line); color:var(--ok); font-weight:700;
+    font-family:Georgia, serif; font-size:16px; text-align:right; width:110px; padding:3px 6px;
+    border-radius:6px;
+  }
+  .stat.excel-input input:focus{outline:none; border-color:var(--accent-dim);}
+  .stat.total-geral .num{color:var(--accent); font-size:24px;}
+  .meta-block{
+    background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+    padding:14px 18px; margin-bottom:20px; display:flex; align-items:center; gap:20px; flex-wrap:wrap;
+  }
+  .meta-block .meta-label{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; margin-bottom:4px;}
+  .meta-block .meta-input-wrap input{
+    background:var(--panel-2); border:1px solid var(--line); color:var(--warn); font-weight:700;
+    font-family:Georgia, serif; font-size:16px; text-align:right; width:130px; padding:4px 8px; border-radius:6px;
+  }
+  .meta-block .meta-input-wrap input:focus{outline:none; border-color:var(--accent-dim);}
+  .meta-bar-wrap{flex:1; min-width:200px;}
+  .meta-bar-track{
+    background:var(--panel-2); border-radius:20px; height:14px; overflow:hidden; position:relative;
+  }
+  .meta-bar-fill{
+    background:linear-gradient(90deg, var(--accent-dim), var(--accent)); height:100%; border-radius:20px;
+    transition:width .3s;
+  }
+  .meta-pct{font-size:13px; font-weight:700; color:var(--accent); white-space:nowrap;}
 </style>
 </head>
 <body>
@@ -177,6 +204,17 @@
     </div>
     <div class="stats" id="stats"></div>
   </header>
+
+  <div class="meta-block" id="meta-block">
+    <div>
+      <div class="meta-label">Meta pessoal</div>
+      <div class="meta-input-wrap">R$ <input type="text" id="input-meta-pessoal" value="0,00"></div>
+    </div>
+    <div class="meta-bar-wrap">
+      <div class="meta-bar-track"><div class="meta-bar-fill" id="meta-bar-fill" style="width:0%"></div></div>
+    </div>
+    <div class="meta-pct" id="meta-pct">0%</div>
+  </div>
 
   <div class="toolbar">
     <button class="primary" id="btn-new">+ Nova cotação</button>
@@ -262,6 +300,8 @@ const boardRef = doc(db, "painel", "cotacoes-board");
 
 const STORAGE_KEY_LOCAL = 'cotacoes-board-v2';
 let cotacoes = [];
+let economiaExcel = 0;
+let metaPessoal = 0;
 let draggedId = null;
 let editingId = null;
 let fornRows = [];
@@ -290,11 +330,15 @@ onSnapshot(boardRef, (snap) => {
     const data = snap.data();
     applyingRemote = true;
     cotacoes = data.cotacoes || [];
+    economiaExcel = data.economiaExcel || 0;
+    metaPessoal = data.metaPessoal || 0;
     render();
     applyingRemote = false;
   } else {
     // documento ainda não existe — cria vazio
     cotacoes = [];
+    economiaExcel = 0;
+    metaPessoal = 0;
     render();
   }
 }, (err) => {
@@ -303,19 +347,22 @@ onSnapshot(boardRef, (snap) => {
   // fallback local
   try{
     const raw = localStorage.getItem(STORAGE_KEY_LOCAL);
-    cotacoes = raw ? JSON.parse(raw) : [];
-  }catch(e){ cotacoes = []; }
+    const parsed = raw ? JSON.parse(raw) : {};
+    cotacoes = Array.isArray(parsed) ? parsed : (parsed.cotacoes || []);
+    economiaExcel = (parsed && parsed.economiaExcel) || 0;
+    metaPessoal = (parsed && parsed.metaPessoal) || 0;
+  }catch(e){ cotacoes = []; economiaExcel = 0; metaPessoal = 0; }
   render();
 });
 
 async function saveData(){
   if(applyingRemote) return;
   try{
-    await setDoc(boardRef, { cotacoes });
+    await setDoc(boardRef, { cotacoes, economiaExcel, metaPessoal });
   }catch(e){
     console.error('Erro ao salvar na nuvem, salvando localmente', e);
     setSyncStatus('offline');
-    try{ localStorage.setItem(STORAGE_KEY_LOCAL, JSON.stringify(cotacoes)); }catch(err){}
+    try{ localStorage.setItem(STORAGE_KEY_LOCAL, JSON.stringify({cotacoes, economiaExcel, metaPessoal})); }catch(err){}
   }
 }
 
@@ -439,7 +486,41 @@ function render(){
   });
 
   renderStats();
+  renderMeta();
 }
+
+function renderMeta(){
+  const totalGeral = getEconomiaPainel() + (economiaExcel || 0);
+  const pct = metaPessoal > 0 ? Math.min(100, (totalGeral / metaPessoal) * 100) : 0;
+  document.getElementById('meta-bar-fill').style.width = pct + '%';
+  document.getElementById('meta-pct').textContent = pct.toFixed(0) + '%';
+  const input = document.getElementById('input-meta-pessoal');
+  if(document.activeElement !== input){
+    input.value = formatMoney(metaPessoal || 0);
+  }
+}
+
+function getEconomiaPainel(){
+  let economiaPainel = 0;
+  cotacoes.forEach(c => {
+    const fechado = (c.fornecedores || []).find(f => f.fechado);
+    if(fechado && c.precoNegociado){
+      const fechadoP = parsePrice(fechado.preco);
+      const negP = parsePrice(c.precoNegociado);
+      if(fechadoP !== null && negP !== null && negP < fechadoP){
+        economiaPainel += (fechadoP - negP);
+      }
+    }
+  });
+  return economiaPainel;
+}
+
+document.getElementById('input-meta-pessoal').addEventListener('change', (e) => {
+  const v = parsePrice(e.target.value);
+  metaPessoal = v !== null ? v : 0;
+  saveData();
+  renderMeta();
+});
 
 function renderStats(){
   const statsEl = document.getElementById('stats');
@@ -447,24 +528,27 @@ function renderStats(){
   const aprovadas = cotacoes.filter(c => c.status === 'aprovada').length;
   const abertas = cotacoes.filter(c => c.status === 'enviada' || c.status === 'analise' || c.status === 'finalizacao').length;
 
-  let economiaTotal = 0;
-  cotacoes.forEach(c => {
-    const fechado = (c.fornecedores || []).find(f => f.fechado);
-    if(fechado && c.precoNegociado){
-      const fechadoP = parsePrice(fechado.preco);
-      const negP = parsePrice(c.precoNegociado);
-      if(fechadoP !== null && negP !== null && negP < fechadoP){
-        economiaTotal += (fechadoP - negP);
-      }
-    }
-  });
+  const economiaPainel = getEconomiaPainel();
+  const totalGeral = economiaPainel + (economiaExcel || 0);
 
   statsEl.innerHTML = `
     <div class="stat"><div class="num">${total}</div><div class="lbl">Total</div></div>
     <div class="stat"><div class="num">${abertas}</div><div class="lbl">Em aberto</div></div>
     <div class="stat"><div class="num">${aprovadas}</div><div class="lbl">Aprovadas</div></div>
-    <div class="stat"><div class="num saving">R$ ${formatMoney(economiaTotal)}</div><div class="lbl">Economia gerada</div></div>
+    <div class="stat"><div class="num saving">R$ ${formatMoney(economiaPainel)}</div><div class="lbl">Economia deste painel</div></div>
+    <div class="stat excel-input">
+      <input type="text" id="input-economia-excel" value="${formatMoney(economiaExcel || 0)}">
+      <div class="lbl">Economia anterior (Excel)</div>
+    </div>
+    <div class="stat total-geral"><div class="num">R$ ${formatMoney(totalGeral)}</div><div class="lbl">Economia total geral</div></div>
   `;
+
+  const input = document.getElementById('input-economia-excel');
+  input.addEventListener('change', () => {
+    const v = parsePrice(input.value);
+    economiaExcel = v !== null ? v : 0;
+    saveData();
+  });
 }
 
 document.querySelectorAll('.col').forEach(col => {
@@ -595,7 +679,7 @@ document.getElementById('btn-save').addEventListener('click', () => {
 });
 
 document.getElementById('btn-export').addEventListener('click', () => {
-  const blob = new Blob([JSON.stringify(cotacoes, null, 2)], {type:'application/json'});
+  const blob = new Blob([JSON.stringify({cotacoes, economiaExcel, metaPessoal}, null, 2)], {type:'application/json'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -615,9 +699,17 @@ document.getElementById('input-import').addEventListener('change', (e) => {
   reader.onload = (ev) => {
     try{
       const imported = JSON.parse(ev.target.result);
-      if(!Array.isArray(imported)) throw new Error('formato inválido');
-      cotacoes = imported;
+      if(Array.isArray(imported)){
+        cotacoes = imported;
+      } else if(imported && Array.isArray(imported.cotacoes)){
+        cotacoes = imported.cotacoes;
+        economiaExcel = imported.economiaExcel || 0;
+        metaPessoal = imported.metaPessoal || 0;
+      } else {
+        throw new Error('formato inválido');
+      }
       saveData();
+      render();
       alert('Dados importados com sucesso!');
     }catch(err){
       alert('Não consegui ler esse arquivo. Confirme que é um backup exportado daqui mesmo.');
