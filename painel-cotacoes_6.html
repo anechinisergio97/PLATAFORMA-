@@ -246,6 +246,31 @@
     color:var(--muted); text-align:center; gap:8px;
   }
   .relatorios-placeholder .icon{font-size:36px; margin-bottom:6px;}
+  .rel-header{display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:16px; margin-bottom:22px;}
+  .rel-controls{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
+  .rel-controls select, .rel-controls input[type="month"], .rel-controls input[type="number"]{
+    background:var(--panel-2); border:1px solid var(--line); color:var(--text); padding:8px 10px;
+    border-radius:8px; font-size:13px;
+  }
+  .rel-toggle{display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden;}
+  .rel-toggle button{
+    background:var(--panel-2); border:none; color:var(--muted); padding:8px 16px; cursor:pointer; font-size:13px; font-weight:700;
+  }
+  .rel-toggle button.active{background:var(--accent); color:#0c1210;}
+  .rel-cards{display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:14px; margin-bottom:24px;}
+  .rel-card{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:18px;}
+  .rel-card .lbl{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom:8px;}
+  .rel-card .val{font-family:Georgia, serif; font-size:26px; font-weight:700;}
+  .rel-card.gasto .val{color:var(--warn);}
+  .rel-card.economia .val{color:var(--ok);}
+  .rel-table{width:100%; border-collapse:collapse; font-size:13px;}
+  .rel-table th{
+    text-align:left; padding:10px 12px; color:var(--muted); font-size:11px; text-transform:uppercase;
+    letter-spacing:.05em; border-bottom:1px solid var(--line);
+  }
+  .rel-table td{padding:10px 12px; border-bottom:1px solid var(--line);}
+  .rel-table tr:hover td{background:var(--panel-2);}
+  .rel-empty{color:var(--muted); text-align:center; padding:30px; font-size:13px;}
   body.readonly-mode #btn-new,
   body.readonly-mode #btn-import,
   body.readonly-mode #btn-reset,
@@ -306,11 +331,43 @@
 
 <div class="wrap app-hidden" id="relatorios-screen">
   <button class="back-to-menu" id="back-to-menu-relatorios">← Voltar ao menu</button>
-  <div class="relatorios-placeholder">
-    <div class="icon">📊</div>
-    <div><strong>Relatórios em construção</strong></div>
-    <div>Essa parte a gente monta no próximo passo.</div>
+  <div class="rel-header">
+    <div>
+      <div class="eyebrow">Compras · Fornecedores</div>
+      <h1 style="margin-top:4px;">Relatório de Economias</h1>
+    </div>
+    <div class="rel-controls">
+      <div class="rel-toggle">
+        <button id="rel-btn-mensal" class="active">Mensal</button>
+        <button id="rel-btn-anual">Anual</button>
+      </div>
+      <input type="month" id="rel-mes">
+      <input type="number" id="rel-ano" min="2020" max="2100" style="width:90px;">
+    </div>
   </div>
+
+  <div class="rel-cards">
+    <div class="rel-card">
+      <div class="lbl">Cotações aprovadas</div>
+      <div class="val" id="rel-qtd">0</div>
+    </div>
+    <div class="rel-card gasto">
+      <div class="lbl">Valor gasto (fechado)</div>
+      <div class="val" id="rel-gasto">R$ 0,00</div>
+    </div>
+    <div class="rel-card economia">
+      <div class="lbl">Economia gerada</div>
+      <div class="val" id="rel-economia">R$ 0,00</div>
+    </div>
+  </div>
+
+  <table class="rel-table" id="rel-table">
+    <thead>
+      <tr><th>Produto</th><th>Data</th><th>Fornecedor fechado</th><th>Valor gasto</th><th>Economia</th></tr>
+    </thead>
+    <tbody id="rel-table-body"></tbody>
+  </table>
+  <div class="rel-empty app-hidden" id="rel-empty">Nenhuma cotação aprovada nesse período.</div>
 </div>
 
 <div class="wrap app-hidden" id="app-content">
@@ -395,6 +452,11 @@
       <div class="saving-hint" id="saving-hint"></div>
     </div>
 
+    <div class="field">
+      <label>Data de aprovação (para relatórios)</label>
+      <input type="date" id="f-data-aprovacao">
+    </div>
+
     <div class="modal-actions">
       <button class="ghost" id="btn-cancel">Cancelar</button>
       <button class="primary" id="btn-save">Salvar</button>
@@ -464,9 +526,112 @@ function showScreen(name){
 }
 
 document.getElementById('menu-btn-painel').addEventListener('click', () => showScreen('painel'));
-document.getElementById('menu-btn-relatorios').addEventListener('click', () => showScreen('relatorios'));
+document.getElementById('menu-btn-relatorios').addEventListener('click', () => { showScreen('relatorios'); renderRelatorio(); });
 document.getElementById('back-to-menu-painel').addEventListener('click', () => showScreen('menu'));
 document.getElementById('back-to-menu-relatorios').addEventListener('click', () => showScreen('menu'));
+
+// ---- Relatórios ----
+let relModo = 'mensal';
+
+function initRelatorioControls(){
+  const hoje = new Date();
+  const mesInput = document.getElementById('rel-mes');
+  const anoInput = document.getElementById('rel-ano');
+  if(!mesInput.value){
+    mesInput.value = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+  }
+  if(!anoInput.value){
+    anoInput.value = hoje.getFullYear();
+  }
+}
+initRelatorioControls();
+
+document.getElementById('rel-btn-mensal').addEventListener('click', () => {
+  relModo = 'mensal';
+  document.getElementById('rel-btn-mensal').classList.add('active');
+  document.getElementById('rel-btn-anual').classList.remove('active');
+  document.getElementById('rel-mes').style.display = '';
+  document.getElementById('rel-ano').style.display = 'none';
+  renderRelatorio();
+});
+document.getElementById('rel-btn-anual').addEventListener('click', () => {
+  relModo = 'anual';
+  document.getElementById('rel-btn-anual').classList.add('active');
+  document.getElementById('rel-btn-mensal').classList.remove('active');
+  document.getElementById('rel-mes').style.display = 'none';
+  document.getElementById('rel-ano').style.display = '';
+  renderRelatorio();
+});
+document.getElementById('rel-mes').addEventListener('change', renderRelatorio);
+document.getElementById('rel-ano').addEventListener('change', renderRelatorio);
+document.getElementById('rel-ano').style.display = 'none';
+
+function renderRelatorio(){
+  const mesFiltro = document.getElementById('rel-mes').value; // "YYYY-MM"
+  const anoFiltro = document.getElementById('rel-ano').value; // "YYYY"
+
+  const aprovadasNoPeriodo = cotacoes.filter(c => {
+    if(c.status !== 'aprovada' || !c.dataAprovacaoISO) return false;
+    if(relModo === 'mensal'){
+      return mesFiltro && c.dataAprovacaoISO.startsWith(mesFiltro);
+    } else {
+      return anoFiltro && c.dataAprovacaoISO.startsWith(String(anoFiltro));
+    }
+  });
+
+  let totalGasto = 0;
+  let totalEconomia = 0;
+  const linhas = [];
+
+  aprovadasNoPeriodo.forEach(c => {
+    const fechado = (c.fornecedores || []).find(f => f.fechado);
+    const fechadoP = fechado ? parsePrice(fechado.preco) : null;
+    const negP = c.precoNegociado ? parsePrice(c.precoNegociado) : null;
+    const valorGasto = (negP !== null) ? negP : (fechadoP !== null ? fechadoP : 0);
+    let economia = 0;
+    if(fechadoP !== null && negP !== null && negP < fechadoP){
+      economia = fechadoP - negP;
+    }
+    totalGasto += valorGasto;
+    totalEconomia += economia;
+    linhas.push({
+      produto: c.produto,
+      data: c.dataAprovacaoISO,
+      fornecedor: fechado ? fechado.nome : '—',
+      valorGasto,
+      economia
+    });
+  });
+
+  linhas.sort((a,b) => (a.data > b.data ? -1 : 1));
+
+  document.getElementById('rel-qtd').textContent = aprovadasNoPeriodo.length;
+  document.getElementById('rel-gasto').textContent = 'R$ ' + formatMoney(totalGasto);
+  document.getElementById('rel-economia').textContent = 'R$ ' + formatMoney(totalEconomia);
+
+  const tbody = document.getElementById('rel-table-body');
+  const table = document.getElementById('rel-table');
+  const empty = document.getElementById('rel-empty');
+  tbody.innerHTML = '';
+  if(linhas.length === 0){
+    table.classList.add('app-hidden');
+    empty.classList.remove('app-hidden');
+  } else {
+    table.classList.remove('app-hidden');
+    empty.classList.add('app-hidden');
+    linhas.forEach(l => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${escapeHtml(l.produto)}</td>
+        <td>${formatDate(l.data)}</td>
+        <td>${escapeHtml(l.fornecedor)}</td>
+        <td>R$ ${formatMoney(l.valorGasto)}</td>
+        <td>${l.economia > 0 ? 'R$ ' + formatMoney(l.economia) : '—'}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+}
 document.getElementById('btn-logout-menu').addEventListener('click', () => signOut(auth));
 
 document.getElementById('btn-login').addEventListener('click', () => {
@@ -682,6 +847,9 @@ function render(){
 
   renderStats();
   renderMeta();
+  if(typeof renderRelatorio === 'function'){
+    try{ renderRelatorio(); }catch(e){}
+  }
 }
 
 function renderMeta(){
@@ -762,6 +930,9 @@ document.querySelectorAll('.col').forEach(col => {
     const c = cotacoes.find(x => x.id === draggedId);
     if(c){
       c.status = status;
+      if(status === 'aprovada' && !c.dataAprovacaoISO){
+        c.dataAprovacaoISO = new Date().toISOString().slice(0,10);
+      }
       saveData();
     }
     draggedId = null;
@@ -819,6 +990,7 @@ function openModal(id){
   document.getElementById('f-produto').value = c ? c.produto : '';
   document.getElementById('f-prazo').value = c ? (c.prazo || '') : '';
   document.getElementById('f-preco-negociado').value = c ? (c.precoNegociado || '') : '';
+  document.getElementById('f-data-aprovacao').value = c ? (c.dataAprovacaoISO || '') : '';
   fornRows = c && c.fornecedores && c.fornecedores.length
     ? c.fornecedores.map(f => ({...f}))
     : [{nome:'', preco:'', condicoes:'', fechado:false}];
@@ -852,6 +1024,7 @@ document.getElementById('btn-save').addEventListener('click', () => {
 
   const prazo = document.getElementById('f-prazo').value;
   const precoNegociado = document.getElementById('f-preco-negociado').value.trim();
+  const dataAprovacaoISO = document.getElementById('f-data-aprovacao').value;
 
   if(editingId){
     const c = cotacoes.find(x => x.id === editingId);
@@ -859,6 +1032,7 @@ document.getElementById('btn-save').addEventListener('click', () => {
     c.prazo = prazo;
     c.fornecedores = fornecedores;
     c.precoNegociado = precoNegociado;
+    c.dataAprovacaoISO = dataAprovacaoISO;
   } else {
     cotacoes.push({
       id: uid(),
@@ -866,6 +1040,7 @@ document.getElementById('btn-save').addEventListener('click', () => {
       prazo,
       fornecedores,
       precoNegociado,
+      dataAprovacaoISO,
       status: 'enviada'
     });
   }
