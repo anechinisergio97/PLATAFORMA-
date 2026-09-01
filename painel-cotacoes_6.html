@@ -192,66 +192,17 @@
     transition:width .3s;
   }
   .meta-pct{font-size:13px; font-weight:700; color:var(--accent); white-space:nowrap;}
-  .login-overlay{
-    position:fixed; inset:0; background:var(--bg); display:flex; align-items:center; justify-content:center;
-    z-index:200;
-  }
-  .login-box{
-    background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:32px;
-    width:100%; max-width:340px;
-  }
-  .login-box h2{font-family:Georgia, serif; margin:0 0 6px; font-size:22px;}
-  .login-box p.sub{color:var(--muted); font-size:12.5px; margin:0 0 20px;}
-  .login-box .field{margin-bottom:12px;}
-  .login-box .field label{display:block; font-size:11px; color:var(--muted); margin-bottom:4px; text-transform:uppercase; letter-spacing:.05em;}
-  .login-box input{
-    width:100%; background:var(--bg); border:1px solid var(--line); color:var(--text);
-    padding:9px 10px; border-radius:6px; font-size:14px;
-  }
-  .login-box input:focus{outline:none; border-color:var(--accent-dim);}
-  .login-box button{
-    width:100%; background:var(--accent); color:#0c1210; border:none; padding:10px; border-radius:8px;
-    font-weight:700; cursor:pointer; font-size:14px; margin-top:6px;
-  }
-  .login-box button:hover{background:#d9ff7a;}
-  .login-error{color:var(--danger); font-size:12px; margin-top:10px; min-height:14px;}
-  .app-hidden{display:none !important;}
-  .logout-btn{
-    background:transparent; border:1px solid var(--line); color:var(--muted); padding:6px 12px;
-    border-radius:8px; cursor:pointer; font-size:12px;
-  }
-  .logout-btn:hover{color:var(--text); border-color:var(--muted);}
 </style>
 </head>
 <body>
-<div class="login-overlay" id="login-overlay">
-  <div class="login-box">
-    <h2>Painel de Cotações</h2>
-    <p class="sub">Faça login para acessar</p>
-    <div class="field">
-      <label>E-mail</label>
-      <input type="email" id="login-email" placeholder="seu@email.com">
-    </div>
-    <div class="field">
-      <label>Senha</label>
-      <input type="password" id="login-senha" placeholder="••••••••">
-    </div>
-    <button id="btn-login">Entrar</button>
-    <div class="login-error" id="login-error"></div>
-  </div>
-</div>
-
-<div class="wrap app-hidden" id="app-content">
+<div class="wrap">
   <header>
     <div class="title-block">
       <div class="eyebrow">Compras · Fornecedores</div>
       <h1>Painel de Cotações</h1>
       <div id="storage-notice" style="font-size:11px; color:var(--muted); margin-top:6px;"><span class="sync-dot loading" id="sync-dot"></span>Conectando...</div>
     </div>
-    <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
-      <div class="stats" id="stats"></div>
-      <button class="logout-btn" id="btn-logout">Sair</button>
-    </div>
+    <div class="stats" id="stats"></div>
   </header>
 
   <div class="meta-block" id="meta-block">
@@ -333,9 +284,6 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/fireba
 import {
   getFirestore, doc, onSnapshot, setDoc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import {
-  getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCFxNa7Dn8erGgLOe3MeVPUiCPDQ8ZmTgI",
@@ -348,51 +296,7 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
-const auth = getAuth(app);
 const boardRef = doc(db, "painel", "cotacoes-board");
-
-let unsubscribeBoard = null;
-
-onAuthStateChanged(auth, (user) => {
-  const loginOverlay = document.getElementById('login-overlay');
-  const appContent = document.getElementById('app-content');
-  if(user){
-    loginOverlay.classList.add('app-hidden');
-    appContent.classList.remove('app-hidden');
-    if(!unsubscribeBoard){
-      unsubscribeBoard = startBoardListener();
-    }
-  } else {
-    loginOverlay.classList.remove('app-hidden');
-    appContent.classList.add('app-hidden');
-    if(unsubscribeBoard){
-      unsubscribeBoard();
-      unsubscribeBoard = null;
-    }
-  }
-});
-
-document.getElementById('btn-login').addEventListener('click', () => {
-  const email = document.getElementById('login-email').value.trim();
-  const senha = document.getElementById('login-senha').value;
-  const errEl = document.getElementById('login-error');
-  errEl.textContent = '';
-  if(!email || !senha){
-    errEl.textContent = 'Preencha e-mail e senha.';
-    return;
-  }
-  signInWithEmailAndPassword(auth, email, senha).catch((err) => {
-    errEl.textContent = 'E-mail ou senha incorretos.';
-  });
-});
-
-document.getElementById('login-senha').addEventListener('keydown', (e) => {
-  if(e.key === 'Enter') document.getElementById('btn-login').click();
-});
-
-document.getElementById('btn-logout').addEventListener('click', () => {
-  signOut(auth);
-});
 
 const STORAGE_KEY_LOCAL = 'cotacoes-board-v2';
 let cotacoes = [];
@@ -420,38 +324,36 @@ function setSyncStatus(status){
 }
 
 // Realtime listener: qualquer mudança no Firestore atualiza a tela na hora
-function startBoardListener(){
-  return onSnapshot(boardRef, (snap) => {
-    setSyncStatus('online');
-    if(snap.exists()){
-      const data = snap.data();
-      applyingRemote = true;
-      cotacoes = data.cotacoes || [];
-      economiaExcel = data.economiaExcel || 0;
-      metaPessoal = data.metaPessoal || 0;
-      render();
-      applyingRemote = false;
-    } else {
-      // documento ainda não existe — cria vazio
-      cotacoes = [];
-      economiaExcel = 0;
-      metaPessoal = 0;
-      render();
-    }
-  }, (err) => {
-    console.error('Erro de sincronização', err);
-    setSyncStatus('offline');
-    // fallback local
-    try{
-      const raw = localStorage.getItem(STORAGE_KEY_LOCAL);
-      const parsed = raw ? JSON.parse(raw) : {};
-      cotacoes = Array.isArray(parsed) ? parsed : (parsed.cotacoes || []);
-      economiaExcel = (parsed && parsed.economiaExcel) || 0;
-      metaPessoal = (parsed && parsed.metaPessoal) || 0;
-    }catch(e){ cotacoes = []; economiaExcel = 0; metaPessoal = 0; }
+onSnapshot(boardRef, (snap) => {
+  setSyncStatus('online');
+  if(snap.exists()){
+    const data = snap.data();
+    applyingRemote = true;
+    cotacoes = data.cotacoes || [];
+    economiaExcel = data.economiaExcel || 0;
+    metaPessoal = data.metaPessoal || 0;
     render();
-  });
-}
+    applyingRemote = false;
+  } else {
+    // documento ainda não existe — cria vazio
+    cotacoes = [];
+    economiaExcel = 0;
+    metaPessoal = 0;
+    render();
+  }
+}, (err) => {
+  console.error('Erro de sincronização', err);
+  setSyncStatus('offline');
+  // fallback local
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY_LOCAL);
+    const parsed = raw ? JSON.parse(raw) : {};
+    cotacoes = Array.isArray(parsed) ? parsed : (parsed.cotacoes || []);
+    economiaExcel = (parsed && parsed.economiaExcel) || 0;
+    metaPessoal = (parsed && parsed.metaPessoal) || 0;
+  }catch(e){ cotacoes = []; economiaExcel = 0; metaPessoal = 0; }
+  render();
+});
 
 async function saveData(){
   if(applyingRemote) return;
