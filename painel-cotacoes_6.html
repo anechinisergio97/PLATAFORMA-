@@ -221,6 +221,47 @@
     border-radius:8px; cursor:pointer; font-size:12px;
   }
   .logout-btn:hover{color:var(--text); border-color:var(--muted);}
+  .menu-screen{
+    min-height:80vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:28px;
+  }
+  .menu-screen .menu-title{text-align:center;}
+  .menu-screen .menu-title .eyebrow{font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--accent-dim); font-weight:700;}
+  .menu-screen .menu-title h1{margin:6px 0 0;}
+  .menu-cards{display:flex; gap:18px; flex-wrap:wrap; justify-content:center;}
+  .menu-card{
+    background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:32px 36px;
+    width:220px; text-align:center; cursor:pointer; transition:border-color .15s, transform .15s;
+  }
+  .menu-card:hover{border-color:var(--accent-dim); transform:translateY(-3px);}
+  .menu-card .icon{font-size:32px; margin-bottom:14px;}
+  .menu-card .label{font-weight:700; font-size:15px;}
+  .menu-card .desc{color:var(--muted); font-size:12px; margin-top:6px;}
+  .back-to-menu{
+    background:transparent; border:1px solid var(--line); color:var(--muted); padding:7px 14px;
+    border-radius:8px; cursor:pointer; font-size:12.5px; margin-bottom:16px;
+  }
+  .back-to-menu:hover{color:var(--text); border-color:var(--muted);}
+  .relatorios-placeholder{
+    min-height:60vh; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    color:var(--muted); text-align:center; gap:8px;
+  }
+  .relatorios-placeholder .icon{font-size:36px; margin-bottom:6px;}
+  body.readonly-mode #btn-new,
+  body.readonly-mode #btn-import,
+  body.readonly-mode #btn-reset,
+  body.readonly-mode .card .actions{
+    display:none !important;
+  }
+  body.readonly-mode #input-economia-excel,
+  body.readonly-mode #input-meta-pessoal{
+    pointer-events:none; background:transparent; border-color:transparent;
+  }
+  body.readonly-mode .card{cursor:default;}
+  .readonly-badge{
+    display:none; font-size:10.5px; color:var(--warn); background:rgba(255,179,71,.12);
+    padding:3px 9px; border-radius:20px; font-weight:700; text-transform:uppercase; letter-spacing:.05em;
+  }
+  body.readonly-mode .readonly-badge{display:inline-block;}
 </style>
 </head>
 <body>
@@ -241,12 +282,45 @@
   </div>
 </div>
 
+<div class="wrap app-hidden" id="menu-screen">
+  <div class="menu-screen">
+    <div class="menu-title">
+      <div class="eyebrow">Compras · Fornecedores</div>
+      <h1>Painel de Cotações</h1>
+    </div>
+    <div class="menu-cards">
+      <div class="menu-card" id="menu-btn-painel">
+        <div class="icon">📋</div>
+        <div class="label">Painel de Cotações</div>
+        <div class="desc">Kanban de cotações em andamento</div>
+      </div>
+      <div class="menu-card" id="menu-btn-relatorios">
+        <div class="icon">📊</div>
+        <div class="label">Relatórios</div>
+        <div class="desc">Economias por mês (em breve)</div>
+      </div>
+    </div>
+    <button class="logout-btn" id="btn-logout-menu">Sair</button>
+  </div>
+</div>
+
+<div class="wrap app-hidden" id="relatorios-screen">
+  <button class="back-to-menu" id="back-to-menu-relatorios">← Voltar ao menu</button>
+  <div class="relatorios-placeholder">
+    <div class="icon">📊</div>
+    <div><strong>Relatórios em construção</strong></div>
+    <div>Essa parte a gente monta no próximo passo.</div>
+  </div>
+</div>
+
 <div class="wrap app-hidden" id="app-content">
   <header>
     <div class="title-block">
+      <button class="back-to-menu" id="back-to-menu-painel">← Voltar ao menu</button>
       <div class="eyebrow">Compras · Fornecedores</div>
       <h1>Painel de Cotações</h1>
       <div id="storage-notice" style="font-size:11px; color:var(--muted); margin-top:6px;"><span class="sync-dot loading" id="sync-dot"></span>Conectando...</div>
+      <span class="readonly-badge">Somente leitura</span>
     </div>
     <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
       <div class="stats" id="stats"></div>
@@ -351,26 +425,49 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const boardRef = doc(db, "painel", "cotacoes-board");
 
+const ADMIN_UID = "Yt8MYvJldQb7XQGv8oydCCYdwQH3";
+let isAdmin = false;
+
 let unsubscribeBoard = null;
 
 onAuthStateChanged(auth, (user) => {
   const loginOverlay = document.getElementById('login-overlay');
+  const menuScreen = document.getElementById('menu-screen');
   const appContent = document.getElementById('app-content');
+  const relatoriosScreen = document.getElementById('relatorios-screen');
   if(user){
+    isAdmin = user.uid === ADMIN_UID;
+    document.body.classList.toggle('readonly-mode', !isAdmin);
     loginOverlay.classList.add('app-hidden');
-    appContent.classList.remove('app-hidden');
+    appContent.classList.add('app-hidden');
+    relatoriosScreen.classList.add('app-hidden');
+    menuScreen.classList.remove('app-hidden');
     if(!unsubscribeBoard){
       unsubscribeBoard = startBoardListener();
     }
   } else {
     loginOverlay.classList.remove('app-hidden');
+    menuScreen.classList.add('app-hidden');
     appContent.classList.add('app-hidden');
+    relatoriosScreen.classList.add('app-hidden');
     if(unsubscribeBoard){
       unsubscribeBoard();
       unsubscribeBoard = null;
     }
   }
 });
+
+function showScreen(name){
+  document.getElementById('menu-screen').classList.toggle('app-hidden', name !== 'menu');
+  document.getElementById('app-content').classList.toggle('app-hidden', name !== 'painel');
+  document.getElementById('relatorios-screen').classList.toggle('app-hidden', name !== 'relatorios');
+}
+
+document.getElementById('menu-btn-painel').addEventListener('click', () => showScreen('painel'));
+document.getElementById('menu-btn-relatorios').addEventListener('click', () => showScreen('relatorios'));
+document.getElementById('back-to-menu-painel').addEventListener('click', () => showScreen('menu'));
+document.getElementById('back-to-menu-relatorios').addEventListener('click', () => showScreen('menu'));
+document.getElementById('btn-logout-menu').addEventListener('click', () => signOut(auth));
 
 document.getElementById('btn-login').addEventListener('click', () => {
   const email = document.getElementById('login-email').value.trim();
@@ -512,7 +609,7 @@ function render(){
     items.forEach(c => {
       const card = document.createElement('div');
       card.className = 'card';
-      card.draggable = true;
+      card.draggable = isAdmin;
       card.dataset.id = c.id;
 
       const fornecedores = c.fornecedores || [];
