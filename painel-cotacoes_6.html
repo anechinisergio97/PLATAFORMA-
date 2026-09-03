@@ -838,6 +838,7 @@ function render(){
       card.innerHTML = `
         <div class="actions">
           <button class="print-btn" data-id="${c.id}" title="Imprimir / Salvar PDF">🖨️</button>
+          ${fechado ? `<button class="pedido-btn" data-id="${c.id}" title="Gerar pedido de compra">🧾</button>` : ''}
           <button class="edit" data-id="${c.id}" title="Editar">✎</button>
           <button class="del" data-id="${c.id}" title="Excluir">×</button>
         </div>
@@ -878,6 +879,12 @@ function render(){
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       imprimirCotacao(btn.dataset.id);
+    });
+  });
+  document.querySelectorAll('.pedido-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      gerarPedidoCompra(btn.dataset.id);
     });
   });
 
@@ -1065,6 +1072,48 @@ function imprimirCotacao(id){
       </thead>
       <tbody>${linhas || '<tr><td colspan="5">Nenhum fornecedor cadastrado</td></tr>'}</tbody>
     </table>
+    <div class="print-signature">
+      <div>Assinatura do solicitante</div>
+      <div>Comprador responsável</div>
+      <div>Liberado por</div>
+    </div>
+    <div class="print-date">Data: ____ / ____ / ______</div>
+    <div class="print-footer">Documento gerado pelo Painel de Cotações.</div>
+  `;
+
+  window.print();
+}
+
+function gerarPedidoCompra(id){
+  const c = cotacoes.find(x => x.id === id);
+  if(!c) return;
+  const fechado = (c.fornecedores || []).find(f => f.fechado);
+  if(!fechado){
+    alert('Marque um fornecedor como "Fechado" nessa cotação antes de gerar o pedido de compra.');
+    return;
+  }
+
+  const hoje = new Date().toLocaleDateString('pt-BR');
+  const numeroPedido = 'PC-' + c.id.replace(/[^0-9]/g, '').slice(-8);
+
+  document.getElementById('print-area').innerHTML = `
+    <h1>Pedido de Compra — ${numeroPedido}</h1>
+    <div class="print-sub">Emitido em ${hoje}</div>
+    <table>
+      <thead>
+        <tr><th>Fornecedor</th><th>Produto</th><th>Qtd</th><th>Valor unitário</th><th>Valor total</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>${escapeHtml(fechado.nome)}</td>
+          <td>${escapeHtml(c.produto)}</td>
+          <td>${escapeHtml(fechado.quantidade || '—')}</td>
+          <td>${fechado.valorUnitario ? 'R$ ' + escapeHtml(fechado.valorUnitario) : '—'}</td>
+          <td>${fechado.preco ? 'R$ ' + escapeHtml(fechado.preco) : '—'}</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="print-sub" style="margin-top:16px;"><strong>Condições:</strong> ${escapeHtml(fechado.condicoes || 'Não informadas')}</div>
     <div class="print-signature">
       <div>Assinatura do solicitante</div>
       <div>Comprador responsável</div>
