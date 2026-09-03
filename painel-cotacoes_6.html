@@ -145,6 +145,11 @@
     position:relative;
   }
   .forn-edit-row .grid2{display:grid; grid-template-columns:1fr 110px; gap:8px; margin-bottom:6px;}
+  .forn-edit-row .grid3{display:grid; grid-template-columns:70px 1fr 110px; gap:8px; margin-bottom:6px; align-items:center;}
+  .forn-edit-row .forn-total-display{
+    background:var(--panel-3); border:1px solid var(--line); color:var(--accent); font-weight:700;
+    padding:7px 8px; border-radius:6px; font-size:13px; text-align:right;
+  }
   .forn-edit-row input[type="text"], .forn-edit-row textarea{
     width:100%; background:var(--bg); border:1px solid var(--line); color:var(--text);
     padding:7px 8px; border-radius:6px; font-size:13px; font-family:inherit;
@@ -271,10 +276,27 @@
   .rel-table td{padding:10px 12px; border-bottom:1px solid var(--line);}
   .rel-table tr:hover td{background:var(--panel-2);}
   .rel-empty{color:var(--muted); text-align:center; padding:30px; font-size:13px;}
+  #print-area{display:none;}
+  @media print{
+    body *{ visibility:hidden; }
+    #print-area, #print-area *{ visibility:visible; }
+    #print-area{
+      display:block; position:absolute; top:0; left:0; width:100%; padding:20px;
+      background:#fff; color:#111; font-family:Arial, sans-serif;
+    }
+    #print-area h1{font-size:20px; margin-bottom:2px;}
+    #print-area .print-sub{color:#555; font-size:12px; margin-bottom:18px;}
+    #print-area table{width:100%; border-collapse:collapse; margin-top:10px;}
+    #print-area th, #print-area td{border:1px solid #ccc; padding:8px; font-size:12px; text-align:left;}
+    #print-area th{background:#f0f0f0;}
+    #print-area .print-fechado{font-weight:bold; color:#0a7a3f;}
+    #print-area .print-footer{margin-top:24px; font-size:11px; color:#777;}
+  }
   body.readonly-mode #btn-new,
   body.readonly-mode #btn-import,
   body.readonly-mode #btn-reset,
-  body.readonly-mode .card .actions{
+  body.readonly-mode .card .edit,
+  body.readonly-mode .card .del{
     display:none !important;
   }
   body.readonly-mode #input-economia-excel,
@@ -808,6 +830,7 @@ function render(){
 
       card.innerHTML = `
         <div class="actions">
+          <button class="print-btn" data-id="${c.id}" title="Imprimir / Salvar PDF">🖨️</button>
           <button class="edit" data-id="${c.id}" title="Editar">✎</button>
           <button class="del" data-id="${c.id}" title="Excluir">×</button>
         </div>
@@ -842,6 +865,12 @@ function render(){
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       openModal(btn.dataset.id);
+    });
+  });
+  document.querySelectorAll('.print-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      imprimirCotacao(btn.dataset.id);
     });
   });
 
@@ -948,10 +977,15 @@ function renderFornRows(){
   fornRows.forEach((row, idx) => {
     const div = document.createElement('div');
     div.className = 'forn-edit-row';
+    const qtd = parseFloat((row.quantidade || '').toString().replace(',', '.')) || 0;
+    const vUnit = parsePrice(row.valorUnitario) || 0;
+    const total = qtd * vUnit;
     div.innerHTML = `
-      <div class="grid2">
-        <input type="text" placeholder="Fornecedor" class="forn-nome-input" value="${escapeHtml(row.nome)}">
-        <input type="text" placeholder="Preço R$" class="forn-preco-input" value="${escapeHtml(row.preco)}">
+      <input type="text" placeholder="Fornecedor" class="forn-nome-input" value="${escapeHtml(row.nome)}" style="margin-bottom:6px;">
+      <div class="grid3">
+        <input type="text" placeholder="Qtd" class="forn-qtd-input" value="${escapeHtml(row.quantidade || '')}">
+        <input type="text" placeholder="Valor unitário R$" class="forn-vunit-input" value="${escapeHtml(row.valorUnitario || '')}">
+        <div class="forn-total-display">R$ ${formatMoney(total)}</div>
       </div>
       <textarea placeholder="Condições (prazo de pagamento, entrega, etc.)" class="forn-cond-input">${escapeHtml(row.condicoes)}</textarea>
       <div class="row-bottom">
@@ -963,7 +997,16 @@ function renderFornRows(){
       </div>
     `;
     div.querySelector('.forn-nome-input').addEventListener('input', (e) => row.nome = e.target.value);
-    div.querySelector('.forn-preco-input').addEventListener('input', (e) => row.preco = e.target.value);
+    div.querySelector('.forn-qtd-input').addEventListener('input', (e) => {
+      row.quantidade = e.target.value;
+      recalcTotal(row);
+      div.querySelector('.forn-total-display').textContent = 'R$ ' + row.preco;
+    });
+    div.querySelector('.forn-vunit-input').addEventListener('input', (e) => {
+      row.valorUnitario = e.target.value;
+      recalcTotal(row);
+      div.querySelector('.forn-total-display').textContent = 'R$ ' + row.preco;
+    });
     div.querySelector('.forn-cond-input').addEventListener('input', (e) => row.condicoes = e.target.value);
     div.querySelector('.forn-fechado-input').addEventListener('change', (e) => {
       fornRows.forEach(r => r.fechado = false);
@@ -978,8 +1021,51 @@ function renderFornRows(){
   });
 }
 
+function recalcTotal(row){
+  const qtd = parseFloat((row.quantidade || '').toString().replace(',', '.')) || 0;
+  const vUnit = parsePrice(row.valorUnitario) || 0;
+  row.preco = formatMoney(qtd * vUnit);
+}
+
+function imprimirCotacao(id){
+  const c = cotacoes.find(x => x.id === id);
+  if(!c) return;
+
+  const statusLabel = {
+    enviada: 'Enviada', analise: 'Em análise', finalizacao: 'Finalização',
+    aprovada: 'Aprovada', perdida: 'Perdida / Recusada'
+  }[c.status] || c.status;
+
+  let linhas = '';
+  (c.fornecedores || []).forEach(f => {
+    linhas += `<tr>
+      <td>${escapeHtml(f.nome)}${f.fechado ? ' <span class="print-fechado">(Fechado)</span>' : ''}</td>
+      <td>${escapeHtml(f.quantidade || '—')}</td>
+      <td>${f.valorUnitario ? 'R$ ' + escapeHtml(f.valorUnitario) : '—'}</td>
+      <td>${f.preco ? 'R$ ' + escapeHtml(f.preco) : '—'}</td>
+      <td>${escapeHtml(f.condicoes || '—')}</td>
+    </tr>`;
+  });
+
+  const hoje = new Date().toLocaleDateString('pt-BR');
+
+  document.getElementById('print-area').innerHTML = `
+    <h1>Cotação — ${escapeHtml(c.produto)}</h1>
+    <div class="print-sub">Status: ${statusLabel} · Prazo de resposta: ${c.prazo ? formatDate(c.prazo) : '—'} · Emitido em ${hoje}</div>
+    <table>
+      <thead>
+        <tr><th>Fornecedor</th><th>Qtd</th><th>Valor unitário</th><th>Valor total</th><th>Condições</th></tr>
+      </thead>
+      <tbody>${linhas || '<tr><td colspan="5">Nenhum fornecedor cadastrado</td></tr>'}</tbody>
+    </table>
+    <div class="print-footer">Documento gerado pelo Painel de Cotações.</div>
+  `;
+
+  window.print();
+}
+
 document.getElementById('btn-add-forn').addEventListener('click', () => {
-  fornRows.push({nome:'', preco:'', condicoes:'', fechado:false});
+  fornRows.push({nome:'', quantidade:'', valorUnitario:'', preco:'', condicoes:'', fechado:false});
   renderFornRows();
 });
 
@@ -993,7 +1079,7 @@ function openModal(id){
   document.getElementById('f-data-aprovacao').value = c ? (c.dataAprovacaoISO || '') : '';
   fornRows = c && c.fornecedores && c.fornecedores.length
     ? c.fornecedores.map(f => ({...f}))
-    : [{nome:'', preco:'', condicoes:'', fechado:false}];
+    : [{nome:'', quantidade:'', valorUnitario:'', preco:'', condicoes:'', fechado:false}];
   renderFornRows();
   overlay.classList.add('open');
 }
@@ -1017,6 +1103,8 @@ document.getElementById('btn-save').addEventListener('click', () => {
     .map(f => ({
       id: f.id || uid('f'),
       nome: f.nome.trim(),
+      quantidade: (f.quantidade || '').toString().trim(),
+      valorUnitario: (f.valorUnitario || '').toString().trim(),
       preco: (f.preco || '').trim(),
       condicoes: (f.condicoes || '').trim(),
       fechado: !!f.fechado
@@ -1096,5 +1184,7 @@ document.getElementById('btn-reset').addEventListener('click', () => {
   }
 });
 </script>
+<div id="print-area"></div>
+
 </body>
 </html>
