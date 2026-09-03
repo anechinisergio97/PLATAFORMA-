@@ -276,6 +276,24 @@
   .rel-table td{padding:10px 12px; border-bottom:1px solid var(--line);}
   .rel-table tr:hover td{background:var(--panel-2);}
   .rel-empty{color:var(--muted); text-align:center; padding:30px; font-size:13px;}
+  .forn-add-row{display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;}
+  .forn-add-row input{
+    background:var(--panel-2); border:1px solid var(--line); color:var(--text); padding:9px 10px;
+    border-radius:8px; font-size:13px;
+  }
+  .forn-add-row input:first-child{flex:1; min-width:180px;}
+  .forn-add-row input:nth-child(2){flex:1; min-width:180px;}
+  .forn-cadastro-list{display:flex; flex-direction:column; gap:8px;}
+  .forn-cadastro-item{
+    background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px 16px;
+    display:flex; justify-content:space-between; align-items:center; gap:12px;
+  }
+  .forn-cadastro-item .fc-nome{font-weight:700; font-size:14px;}
+  .forn-cadastro-item .fc-contato{color:var(--muted); font-size:12px; margin-top:2px;}
+  .forn-cadastro-item .fc-del{
+    background:none; border:none; color:var(--muted); cursor:pointer; font-size:16px; padding:4px 8px;
+  }
+  .forn-cadastro-item .fc-del:hover{color:var(--danger);}
   #print-area{display:none;}
   @media print{
     body *{ visibility:hidden; }
@@ -303,7 +321,9 @@
   body.readonly-mode #btn-import,
   body.readonly-mode #btn-reset,
   body.readonly-mode .card .edit,
-  body.readonly-mode .card .del{
+  body.readonly-mode .card .del,
+  body.readonly-mode .forn-add-row,
+  body.readonly-mode .fc-del{
     display:none !important;
   }
   body.readonly-mode #input-economia-excel,
@@ -351,7 +371,12 @@
       <div class="menu-card" id="menu-btn-relatorios">
         <div class="icon">📊</div>
         <div class="label">Relatórios</div>
-        <div class="desc">Economias por mês (em breve)</div>
+        <div class="desc">Economias por mês ou ano</div>
+      </div>
+      <div class="menu-card" id="menu-btn-fornecedores">
+        <div class="icon">🏢</div>
+        <div class="label">Fornecedores</div>
+        <div class="desc">Cadastro para reaproveitar nas cotações</div>
       </div>
     </div>
     <button class="logout-btn" id="btn-logout-menu">Sair</button>
@@ -397,6 +422,25 @@
     <tbody id="rel-table-body"></tbody>
   </table>
   <div class="rel-empty app-hidden" id="rel-empty">Nenhuma cotação aprovada nesse período.</div>
+</div>
+
+<div class="wrap app-hidden" id="fornecedores-screen">
+  <button class="back-to-menu" id="back-to-menu-fornecedores">← Voltar ao menu</button>
+  <div class="rel-header">
+    <div>
+      <div class="eyebrow">Compras · Fornecedores</div>
+      <h1 style="margin-top:4px;">Cadastro de Fornecedores</h1>
+    </div>
+  </div>
+
+  <div class="forn-add-row">
+    <input type="text" id="fc-nome-input" placeholder="Nome do fornecedor">
+    <input type="text" id="fc-contato-input" placeholder="Contato (telefone, e-mail...) — opcional">
+    <button class="primary" id="fc-btn-add">+ Adicionar</button>
+  </div>
+
+  <div class="forn-cadastro-list" id="fc-list"></div>
+  <div class="rel-empty app-hidden" id="fc-empty">Nenhum fornecedor cadastrado ainda. Eles também são adicionados automaticamente conforme você usa nas cotações.</div>
 </div>
 
 <div class="wrap app-hidden" id="app-content">
@@ -552,12 +596,84 @@ function showScreen(name){
   document.getElementById('menu-screen').classList.toggle('app-hidden', name !== 'menu');
   document.getElementById('app-content').classList.toggle('app-hidden', name !== 'painel');
   document.getElementById('relatorios-screen').classList.toggle('app-hidden', name !== 'relatorios');
+  document.getElementById('fornecedores-screen').classList.toggle('app-hidden', name !== 'fornecedores');
 }
 
 document.getElementById('menu-btn-painel').addEventListener('click', () => showScreen('painel'));
 document.getElementById('menu-btn-relatorios').addEventListener('click', () => { showScreen('relatorios'); renderRelatorio(); });
+document.getElementById('menu-btn-fornecedores').addEventListener('click', () => { showScreen('fornecedores'); renderFornecedoresCadastro(); });
 document.getElementById('back-to-menu-painel').addEventListener('click', () => showScreen('menu'));
 document.getElementById('back-to-menu-relatorios').addEventListener('click', () => showScreen('menu'));
+document.getElementById('back-to-menu-fornecedores').addEventListener('click', () => showScreen('menu'));
+
+// ---- Cadastro de fornecedores ----
+function normalizarNome(n){ return (n || '').trim().toLowerCase(); }
+
+function registrarFornecedorSeNovo(nome, admin){
+  if(!admin) return; // só admin escreve
+  const nomeTrim = (nome || '').trim();
+  if(!nomeTrim) return;
+  const jaExiste = fornecedoresCadastrados.some(f => normalizarNome(f.nome) === normalizarNome(nomeTrim));
+  if(!jaExiste){
+    fornecedoresCadastrados.push({ id: uid('fc'), nome: nomeTrim, contato: '' });
+  }
+}
+
+function atualizarDatalistFornecedores(){
+  const datalist = document.getElementById('lista-fornecedores-cadastrados');
+  if(!datalist) return;
+  datalist.innerHTML = fornecedoresCadastrados
+    .map(f => `<option value="${escapeHtml(f.nome)}">`)
+    .join('');
+}
+
+function renderFornecedoresCadastro(){
+  const listEl = document.getElementById('fc-list');
+  const emptyEl = document.getElementById('fc-empty');
+  listEl.innerHTML = '';
+  if(fornecedoresCadastrados.length === 0){
+    emptyEl.classList.remove('app-hidden');
+    return;
+  }
+  emptyEl.classList.add('app-hidden');
+  fornecedoresCadastrados
+    .slice()
+    .sort((a,b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+    .forEach(f => {
+      const item = document.createElement('div');
+      item.className = 'forn-cadastro-item';
+      item.innerHTML = `
+        <div>
+          <div class="fc-nome">${escapeHtml(f.nome)}</div>
+          ${f.contato ? `<div class="fc-contato">${escapeHtml(f.contato)}</div>` : ''}
+        </div>
+        <button class="fc-del" data-id="${f.id}" title="Remover">×</button>
+      `;
+      item.querySelector('.fc-del').addEventListener('click', () => {
+        fornecedoresCadastrados = fornecedoresCadastrados.filter(x => x.id !== f.id);
+        saveData();
+        renderFornecedoresCadastro();
+      });
+      listEl.appendChild(item);
+    });
+}
+
+document.getElementById('fc-btn-add').addEventListener('click', () => {
+  const nomeInput = document.getElementById('fc-nome-input');
+  const contatoInput = document.getElementById('fc-contato-input');
+  const nome = nomeInput.value.trim();
+  if(!nome){ nomeInput.focus(); return; }
+  const jaExiste = fornecedoresCadastrados.some(f => normalizarNome(f.nome) === normalizarNome(nome));
+  if(jaExiste){
+    alert('Esse fornecedor já está cadastrado.');
+    return;
+  }
+  fornecedoresCadastrados.push({ id: uid('fc'), nome, contato: contatoInput.value.trim() });
+  saveData();
+  nomeInput.value = '';
+  contatoInput.value = '';
+  renderFornecedoresCadastro();
+});
 
 // ---- Relatórios ----
 let relModo = 'mensal';
@@ -689,6 +805,7 @@ const STORAGE_KEY_LOCAL = 'cotacoes-board-v2';
 let cotacoes = [];
 let economiaExcel = 0;
 let metaPessoal = 0;
+let fornecedoresCadastrados = [];
 let draggedId = null;
 let editingId = null;
 let fornRows = [];
@@ -720,6 +837,7 @@ function startBoardListener(){
       cotacoes = data.cotacoes || [];
       economiaExcel = data.economiaExcel || 0;
       metaPessoal = data.metaPessoal || 0;
+      fornecedoresCadastrados = data.fornecedoresCadastrados || [];
       render();
       applyingRemote = false;
     } else {
@@ -727,6 +845,7 @@ function startBoardListener(){
       cotacoes = [];
       economiaExcel = 0;
       metaPessoal = 0;
+      fornecedoresCadastrados = [];
       render();
     }
   }, (err) => {
@@ -739,7 +858,8 @@ function startBoardListener(){
       cotacoes = Array.isArray(parsed) ? parsed : (parsed.cotacoes || []);
       economiaExcel = (parsed && parsed.economiaExcel) || 0;
       metaPessoal = (parsed && parsed.metaPessoal) || 0;
-    }catch(e){ cotacoes = []; economiaExcel = 0; metaPessoal = 0; }
+      fornecedoresCadastrados = (parsed && parsed.fornecedoresCadastrados) || [];
+    }catch(e){ cotacoes = []; economiaExcel = 0; metaPessoal = 0; fornecedoresCadastrados = []; }
     render();
   });
 }
@@ -747,11 +867,11 @@ function startBoardListener(){
 async function saveData(){
   if(applyingRemote) return;
   try{
-    await setDoc(boardRef, { cotacoes, economiaExcel, metaPessoal });
+    await setDoc(boardRef, { cotacoes, economiaExcel, metaPessoal, fornecedoresCadastrados });
   }catch(e){
     console.error('Erro ao salvar na nuvem, salvando localmente', e);
     setSyncStatus('offline');
-    try{ localStorage.setItem(STORAGE_KEY_LOCAL, JSON.stringify({cotacoes, economiaExcel, metaPessoal})); }catch(err){}
+    try{ localStorage.setItem(STORAGE_KEY_LOCAL, JSON.stringify({cotacoes, economiaExcel, metaPessoal, fornecedoresCadastrados})); }catch(err){}
   }
 }
 
@@ -890,6 +1010,7 @@ function render(){
 
   renderStats();
   renderMeta();
+  atualizarDatalistFornecedores();
   if(typeof renderRelatorio === 'function'){
     try{ renderRelatorio(); }catch(e){}
   }
@@ -995,7 +1116,7 @@ function renderFornRows(){
     const vUnit = parsePrice(row.valorUnitario) || 0;
     const total = qtd * vUnit;
     div.innerHTML = `
-      <input type="text" placeholder="Fornecedor" class="forn-nome-input" value="${escapeHtml(row.nome)}" style="margin-bottom:6px;">
+      <input type="text" placeholder="Fornecedor" class="forn-nome-input" list="lista-fornecedores-cadastrados" value="${escapeHtml(row.nome)}" style="margin-bottom:6px;">
       <div class="grid3">
         <input type="text" placeholder="Qtd" class="forn-qtd-input" value="${escapeHtml(row.quantidade || '')}">
         <input type="text" placeholder="Valor unitário R$" class="forn-vunit-input" value="${escapeHtml(row.valorUnitario || '')}">
@@ -1172,6 +1293,8 @@ document.getElementById('btn-save').addEventListener('click', () => {
       fechado: !!f.fechado
     }));
 
+  fornecedores.forEach(f => registrarFornecedorSeNovo(f.nome, isAdmin));
+
   const prazo = document.getElementById('f-prazo').value;
   const precoNegociado = document.getElementById('f-preco-negociado').value.trim();
   const dataAprovacaoISO = document.getElementById('f-data-aprovacao').value;
@@ -1246,6 +1369,8 @@ document.getElementById('btn-reset').addEventListener('click', () => {
   }
 });
 </script>
+<datalist id="lista-fornecedores-cadastrados"></datalist>
+
 <div id="print-area"></div>
 
 </body>
