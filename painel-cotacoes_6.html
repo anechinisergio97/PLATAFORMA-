@@ -308,6 +308,12 @@
     #print-area th, #print-area td{border:1px solid #ccc; padding:8px; font-size:12px; text-align:left;}
     #print-area th{background:#f0f0f0;}
     #print-area .print-fechado{font-weight:bold; color:#0a7a3f;}
+    #print-area .print-menor-preco{background:#fff3b0 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact;}
+    #print-area .print-menor-preco td{font-weight:bold;}
+    #print-area .print-menor-tag{
+      display:inline-block; background:#0a7a3f; color:#fff; font-size:9px; font-weight:bold;
+      padding:2px 6px; border-radius:4px; margin-left:6px; letter-spacing:.03em; vertical-align:middle;
+    }
     #print-area .print-signature{
       margin-top:60px; display:flex; justify-content:space-between; gap:24px;
     }
@@ -1171,13 +1177,18 @@ function imprimirCotacao(id){
     aprovada: 'Aprovada', perdida: 'Perdida / Recusada'
   }[c.status] || c.status;
 
+  const precos = (c.fornecedores || []).map(f => parsePrice(f.preco)).filter(v => v !== null);
+  const menorPreco = precos.length ? Math.min(...precos) : null;
+
   let linhas = '';
   (c.fornecedores || []).forEach(f => {
-    linhas += `<tr>
+    const p = parsePrice(f.preco);
+    const isMenor = menorPreco !== null && p === menorPreco;
+    linhas += `<tr class="${isMenor ? 'print-menor-preco' : ''}">
       <td>${escapeHtml(f.nome)}${f.fechado ? ' <span class="print-fechado">(Fechado)</span>' : ''}</td>
       <td>${escapeHtml(f.quantidade || '—')}</td>
       <td>${f.valorUnitario ? 'R$ ' + escapeHtml(f.valorUnitario) : '—'}</td>
-      <td>${f.preco ? 'R$ ' + escapeHtml(f.preco) : '—'}</td>
+      <td>${f.preco ? 'R$ ' + escapeHtml(f.preco) : '—'}${isMenor ? ' <span class="print-menor-tag">MENOR PREÇO</span>' : ''}</td>
       <td>${escapeHtml(f.condicoes || '—')}</td>
     </tr>`;
   });
