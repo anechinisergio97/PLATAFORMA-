@@ -1120,7 +1120,8 @@ function renderFornRows(){
     div.className = 'forn-edit-row';
     const qtd = parseFloat((row.quantidade || '').toString().replace(',', '.')) || 0;
     const vUnit = parsePrice(row.valorUnitario) || 0;
-    const total = qtd * vUnit;
+    const temQtdOuUnit = (row.quantidade && row.quantidade.toString().trim() !== '') || (row.valorUnitario && row.valorUnitario.toString().trim() !== '');
+    const total = temQtdOuUnit ? (qtd * vUnit) : (parsePrice(row.preco) || 0);
     div.innerHTML = `
       <input type="text" placeholder="Fornecedor" class="forn-nome-input" list="lista-fornecedores-cadastrados" value="${escapeHtml(row.nome)}" style="margin-bottom:6px;">
       <div class="grid3">
@@ -1165,7 +1166,10 @@ function renderFornRows(){
 function recalcTotal(row){
   const qtd = parseFloat((row.quantidade || '').toString().replace(',', '.')) || 0;
   const vUnit = parsePrice(row.valorUnitario) || 0;
-  row.preco = formatMoney(qtd * vUnit);
+  const temQtdOuUnit = (row.quantidade && row.quantidade.toString().trim() !== '') || (row.valorUnitario && row.valorUnitario.toString().trim() !== '');
+  if(temQtdOuUnit){
+    row.preco = formatMoney(qtd * vUnit);
+  }
 }
 
 function imprimirCotacao(id){
