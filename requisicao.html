@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel de Requisições — Fazenda Progresso</title>
+<style>
+:root{
+  --bg:#101511; --panel:#161d18; --panel2:#1c241e; --panel3:#20291f;
+  --line:#2a342c; --text:#eef2ea; --muted:#93a396; --accent:#c8ff4d;
+  --accent2:#8fb536; --warn:#ffb347; --danger:#ff6b5e; --ok:#5fe3a3;
+  --blue:#8fb9ff; --purple:#c8a5ff; --radius:12px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:"Segoe UI",system-ui,-apple-system,sans-serif}
+body{padding:24px 18px 50px}
+button,input,select,textarea{font:inherit}
+button{cursor:pointer}
+.app{max-width:1650px;margin:auto}
+.hidden{display:none!important}
+
+/* Login */
+.login{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px;z-index:1000}
+.login-box{width:100%;max-width:380px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:30px}
+.login-box h1{font-family:Georgia,serif;font-size:28px;margin:0 0 8px}
+.login-box p{color:var(--muted);margin:0 0 22px;font-size:13px}
+.field{margin-bottom:14px}
+.field label{display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+.field input,.field select,.field textarea,
+.search,.top-select{
+  width:100%;background:var(--bg);border:1px solid var(--line);color:var(--text);
+  padding:10px 11px;border-radius:8px;outline:none
+}
+.field textarea{min-height:88px;resize:vertical}
+.field input:focus,.field select:focus,.field textarea:focus,.search:focus{border-color:var(--accent2)}
+.primary{background:var(--accent);color:#0c1210;border:0;border-radius:8px;padding:10px 16px;font-weight:800}
+.primary:hover{background:#d9ff7a}
+.ghost{background:transparent;color:var(--muted);border:1px solid var(--line);border-radius:8px;padding:9px 13px}
+.ghost:hover{color:var(--text);border-color:var(--muted)}
+.danger{background:transparent;color:var(--danger);border:1px solid rgba(255,107,94,.35);border-radius:8px;padding:8px 11px}
+.error{min-height:18px;color:var(--danger);font-size:12px;margin-top:10px}
+
+/* Header */
+header{display:flex;justify-content:space-between;gap:18px;align-items:flex-end;flex-wrap:wrap;margin-bottom:18px;padding-bottom:18px;border-bottom:1px solid var(--line)}
+.eyebrow{color:var(--accent2);font-size:11px;font-weight:800;letter-spacing:.18em;text-transform:uppercase}
+h1{font-family:Georgia,serif;font-size:32px;font-weight:600;margin:5px 0 0;letter-spacing:-.02em}
+.userbox{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.user-email{font-size:12px;color:var(--muted)}
+.role-badge{font-size:10px;text-transform:uppercase;letter-spacing:.05em;border:1px solid var(--line);padding:4px 8px;border-radius:20px;color:var(--warn)}
+.sync{font-size:11px;color:var(--muted);margin-top:7px}
+
+/* KPI */
+.kpis{display:grid;grid-template-columns:repeat(6,minmax(120px,1fr));gap:10px;margin-bottom:16px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:14px}
+.kpi .n{font-family:Georgia,serif;font-size:25px;font-weight:700}
+.kpi .l{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-top:4px}
+.kpi.urgent .n{color:var(--danger)}
+.kpi.wait .n{color:var(--warn)}
+.kpi.done .n{color:var(--ok)}
+
+/* Controls */
+.controls{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.search{width:330px;max-width:100%}
+.top-select{width:auto;min-width:170px}
+.view-toggle{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-left:auto}
+.view-toggle button{border:0;background:var(--panel2);color:var(--muted);padding:9px 13px}
+.view-toggle button.active{background:var(--accent);color:#0b120d;font-weight:800}
+
+/* Board */
+.board{display:grid;grid-template-columns:repeat(6,minmax(235px,1fr));gap:10px;overflow-x:auto;padding-bottom:8px}
+.col{background:var(--panel);border:1px solid var(--line);border-radius:12px;min-height:480px;display:flex;flex-direction:column}
+.col-head{padding:12px 12px 10px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+.col-head .name{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em}
+.col[data-status="nova"] .name{color:var(--blue)}
+.col[data-status="recebida"] .name{color:var(--warn)}
+.col[data-status="cotacao"] .name{color:var(--purple)}
+.col[data-status="autorizada"] .name{color:var(--ok)}
+.col[data-status="comprada"] .name{color:var(--accent)}
+.col[data-status="recusada"] .name{color:var(--danger)}
+.count{font-size:11px;color:var(--muted);background:var(--panel2);padding:3px 8px;border-radius:20px}
+.col-body{padding:9px;display:flex;flex-direction:column;gap:9px;min-height:120px;flex:1}
+.card{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:12px;cursor:pointer;transition:.15s}
+.card:hover{border-color:var(--accent2);transform:translateY(-1px)}
+.card-top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.card-title{font-weight:800;font-size:14px;line-height:1.25}
+.tag{font-size:9px;text-transform:uppercase;letter-spacing:.05em;font-weight:800;padding:4px 7px;border-radius:20px;white-space:nowrap}
+.tag-urgent{background:rgba(255,107,94,.13);color:var(--danger)}
+.tag-normal{background:rgba(255,179,71,.12);color:var(--warn)}
+.tag-quote{background:rgba(95,227,163,.11);color:var(--ok)}
+.meta{font-size:11px;color:var(--muted);margin-top:7px;display:flex;flex-direction:column;gap:4px}
+.meta strong{color:var(--text);font-weight:600}
+.preview{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-top:9px}
+.preview img{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
+.card-footer{display:flex;justify-content:space-between;gap:8px;margin-top:9px;padding-top:8px;border-top:1px solid var(--line);font-size:10px;color:var(--muted)}
+.empty{color:var(--muted);font-size:11px;text-align:center;padding:22px 8px;opacity:.6}
+
+/* Modal */
+.modal{position:fixed;inset:0;background:rgba(5,8,5,.75);display:none;align-items:center;justify-content:center;padding:18px;z-index:900}
+.modal.open{display:flex}
+.modal-box{width:100%;max-width:860px;max-height:94vh;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px}
+.modal-head{display:flex;justify-content:space-between;align-items:flex-start;gap:15px;margin-bottom:18px}
+.modal-head h2{font-family:Georgia,serif;margin:0;font-size:23px}
+.modal-head p{color:var(--muted);font-size:12px;margin:4px 0 0}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid3{display:grid;grid-template-columns:1.3fr .7fr .8fr;gap:10px}
+.req-section{border-top:1px solid var(--line);margin-top:18px;padding-top:16px}
+.req-section h3{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 12px}
+.item-row{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:9px;position:relative}
+.item-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.item-head strong{font-size:13px}
+.item-actions{display:flex;gap:4px}
+.link-row{display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:7px}
+.photo-zone{border:1px dashed var(--line);border-radius:8px;padding:10px;margin-top:8px;background:var(--bg)}
+.photo-zone input{width:100%;font-size:12px;color:var(--muted)}
+.photo-list{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}
+.photo-thumb{position:relative;width:82px}
+.photo-thumb img{width:82px;height:66px;object-fit:cover;border-radius:7px;border:1px solid var(--line)}
+.photo-thumb button{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;border:1px solid var(--line);background:var(--panel3);color:var(--text);font-size:12px}
+.upload-state{font-size:10px;color:var(--muted);margin-top:5px}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:20px}
+.readonly-note{padding:10px 12px;background:rgba(255,179,71,.08);color:var(--warn);border:1px solid rgba(255,179,71,.18);border-radius:8px;font-size:11px;margin-top:10px}
+
+/* Detail */
+.detail-grid{display:grid;grid-template-columns:1.2fr .8fr;gap:14px}
+.panel{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:14px}
+.detail-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+.detail-value{font-size:13px;line-height:1.45}
+.status-select{background:var(--bg);border:1px solid var(--line);color:var(--text);padding:8px;border-radius:8px}
+.big-photo{width:100%;max-height:310px;object-fit:contain;background:var(--bg);border-radius:8px;border:1px solid var(--line);margin-top:8px}
+.links a{display:block;color:var(--accent);text-decoration:none;font-size:12px;overflow-wrap:anywhere;margin-top:4px}
+.item-card{border-top:1px solid var(--line);padding-top:10px;margin-top:10px}
+.item-card:first-child{border-top:0;padding-top:0}
+.pill{display:inline-block;border:1px solid var(--line);padding:3px 7px;border-radius:20px;color:var(--muted);font-size:10px;margin-right:4px;margin-bottom:4px}
+.item-photo-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:8px}
+.item-photo-grid a img{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:7px;border:1px solid var(--line)}
+
+/* List view */
+.list-view{display:none;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:auto}
+.list-view table{width:100%;border-collapse:collapse;font-size:12px}
+.list-view th,.list-view td{padding:10px 11px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+.list-view th{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.list-view tr:hover td{background:var(--panel2)}
+
+/* Toast */
+.toast{position:fixed;right:18px;bottom:18px;background:var(--panel);border:1px solid var(--line);padding:12px 14px;border-radius:9px;box-shadow:0 10px 30px rgba(0,0,0,.25);font-size:12px;z-index:1100;display:none}
+.toast.show{display:block}
+
+@media(max-width:1200px){.kpis{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:820px){body{padding:15px 10px}.grid2,.detail-grid{grid-template-columns:1fr}.grid3{grid-template-columns:1fr}.board{grid-template-columns:repeat(6,minmax(250px,1fr))}.view-toggle{margin-left:0}}
+@media(max-width:560px){.kpis{grid-template-columns:repeat(2,1fr)}.controls>*{width:100%!important}.view-toggle button{flex:1}.modal-box{padding:16px}}
+</style>
+</head>
+<body>
+
+<div class="login" id="login">
+  <div class="login-box">
+    <div class="eyebrow">Compras · Fazenda Progresso</div>
+    <h1>Painel de Requisições</h1>
+    <p>Solicite peças, materiais, serviços e outros itens diretamente para o setor de Compras.</p>
+    <div class="field"><label>E-mail</label><input id="email" type="email" placeholder="seu@email.com" autocomplete="username"></div>
+    <div class="field"><label>Senha</label><input id="password" type="password" placeholder="••••••••" autocomplete="current-password"></div>
+    <button class="primary" id="loginBtn" style="width:100%">Entrar</button>
+    <div class="error" id="loginError"></div>
+  </div>
+</div>
+
+<div class="app hidden" id="app">
+  <header>
+    <div>
+      <div class="eyebrow">Compras · Fazenda Progresso</div>
+      <h1>Painel de Requisições</h1>
+      <div class="sync" id="sync">● Conectando...</div>
+    </div>
+    <div class="userbox">
+      <div>
+        <div class="user-email" id="userEmail"></div>
+        <div class="role-badge" id="roleBadge">Usuário</div>
+      </div>
+      <button class="ghost" id="logoutBtn">Sair</button>
+    </div>
+  </header>
+
+  <section class="kpis">
+    <div class="kpi"><div class="n" id="kTotal">0</div><div class="l">Total</div></div>
+    <div class="kpi"><div class="n" id="kNew">0</div><div class="l">Novas</div></div>
+    <div class="kpi urgent"><div class="n" id="kUrgent">0</div><div class="l">Urgentes</div></div>
+    <div class="kpi wait"><div class="n" id="kQuote">0</div><div class="l">Em cotação</div></div>
+    <div class="kpi done"><div class="n" id="kBought">0</div><div class="l">Compradas</div></div>
+    <div class="kpi"><div class="n" id="kMy">0</div><div class="l">Minhas</div></div>
+  </section>
+
+  <div class="controls">
+    <input class="search" id="search" placeholder="🔎 Buscar peça, equipamento, solicitante, código...">
+    <select class="top-select" id="filterPriority">
+      <option value="">Todas as prioridades</option>
+      <option value="urgente">Urgentes</option>
+      <option value="normal">Normais</option>
+      <option value="cotar">Tempo para cotar</option>
+    </select>
+    <select class="top-select" id="filterSector">
+      <option value="">Todos os setores</option>
+      <option>Oficina</option><option>Operação</option><option>Almoxarifado</option>
+      <option>Agrícola</option><option>Administrativo</option><option>Outro</option>
+    </select>
+    <button class="primary" id="newBtn">+ Nova requisição</button>
+    <button class="ghost" id="exportBtn">⬇ Exportar CSV</button>
+    <div class="view-toggle">
+      <button class="active" id="kanbanBtn">Kanban</button>
+      <button id="listBtn">Lista</button>
+    </div>
+  </div>
+
+  <div class="board" id="board"></div>
+  <div class="list-view" id="listView"></div>
+</div>
+
+<!-- Modal de criação/edição -->
+<div class="modal" id="formModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div>
+        <h2 id="formTitle">Nova requisição</h2>
+        <p>Quanto mais informações você colocar, menor será o retrabalho do setor de Compras.</p>
+      </div>
+      <button class="ghost" id="closeForm">✕</button>
+    </div>
+
+    <div class="grid2">
+      <div class="field"><label>Solicitante</label><input id="fSolicitante" readonly></div>
+      <div class="field"><label>Setor</label>
+        <select id="fSetor"><option>Oficina</option><option>Operação</option><option>Almoxarifado</option><option>Agrícola</option><option>Administrativo</option><option>Outro</option></select>
+      </div>
+    </div>
+
+    <div class="grid2">
+      <div class="field"><label>Equipamento / veículo</label><input id="fEquipamento" placeholder="Ex.: John Deere 5078E, L200 Triton 2016..."></div>
+      <div class="field"><label>Patrimônio / identificação (opcional)</label><input id="fPatrimonio" placeholder="Ex.: TR-07, L-02..."></div>
+    </div>
+
+    <div class="grid2">
+      <div class="field"><label>Prioridade</label>
+        <select id="fPrioridade">
+          <option value="normal">Normal</option>
+          <option value="urgente">🔴 Urgente</option>
+          <option value="cotar">🟢 Pode aguardar cotação</option>
+        </select>
+      </div>
+      <div class="field"><label>Data necessária</label><input id="fDataNecessaria" type="date"></div>
+    </div>
+
+    <div class="field"><label>Motivo / observação da necessidade</label><textarea id="fObs" placeholder="Explique o problema, onde será utilizado, motivo da urgência ou outra informação importante."></textarea></div>
+
+    <div class="req-section">
+      <h3>Itens da requisição</h3>
+      <div id="items"></div>
+      <button class="ghost" id="addItem">+ Adicionar item</button>
+    </div>
+
+    <div class="readonly-note hidden" id="editNote">Depois que a requisição avançar para cotação, as alterações ficam sob controle do setor de Compras.</div>
+
+    <div class="modal-actions">
+      <button class="ghost" id="cancelForm">Cancelar</button>
+      <button class="primary" id="saveForm">Salvar requisição</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de detalhes -->
+<div class="modal" id="detailModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div>
+        <div class="eyebrow">Detalhes da requisição</div>
+        <h2 id="dTitle"></h2>
+        <p id="dSub"></p>
+      </div>
+      <button class="ghost" id="closeDetail">✕</button>
+    </div>
+    <div class="detail-grid">
+      <div class="panel">
+        <div class="detail-label">Descrição / observação</div>
+        <div class="detail-value" id="dObs">—</div>
+
+        <div class="detail-label" style="margin-top:14px">Itens</div>
+        <div id="dItems"></div>
+      </div>
+
+      <div class="panel">
+        <div class="detail-label">Solicitante</div>
+        <div class="detail-value" id="dSolicitante"></div>
+
+        <div class="detail-label" style="margin-top:12px">Setor</div>
+        <div class="detail-value" id="dSetor"></div>
+
+        <div class="detail-label" style="margin-top:12px">Equipamento</div>
+        <div class="detail-value" id="dEquipamento"></div>
+
+        <div class="detail-label" style="margin-top:12px">Prioridade</div>
+        <div class="detail-value" id="dPrioridade"></div>
+
+        <div class="detail-label" style="margin-top:12px">Data necessária</div>
+        <div class="detail-value" id="dData"></div>
+
+        <div class="detail-label" style="margin-top:16px">Status</div>
+        <select class="status-select" id="dStatus">
+          <option value="nova">Nova</option>
+          <option value="recebida">Recebida</option>
+          <option value="cotacao">Em cotação</option>
+          <option value="autorizada">Compra autorizada</option>
+          <option value="comprada">Comprada / concluída</option>
+          <option value="recusada">Recusada</option>
+        </select>
+        <div class="modal-actions" style="justify-content:flex-start">
+          <button class="primary" id="saveStatus">Salvar status</button>
+          <button class="ghost hidden" id="editRequest">✎ Editar</button>
+          <button class="danger hidden" id="deleteRequest">Excluir</button>
+        </div>
+        <div class="readonly-note hidden" id="adminOnly">Somente Compras/Administrador pode alterar o status desta requisição.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getFirestore, collection, addDoc, doc, updateDoc, deleteDoc,
+  onSnapshot, query, orderBy, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import {
+  getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import {
+  getStorage, ref, uploadBytes, getDownloadURL, deleteObject
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCFxNa7Dn8erGgLOe3MeVPUiCPDQ8ZmTgI",
+  authDomain: "painel-cotacoes.firebaseapp.com",
+  projectId: "painel-cotacoes",
+  storageBucket: "painel-cotacoes.firebasestorage.app",
+  messagingSenderId: "723707624476",
+  appId: "1:723707624476:web:a9e24ec5310110383b33d9"
+};
+
+const ADMIN_UID = "Yt8MYvJldQb7XQGv8oydCCYdwQH3";
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
+const storage = getStorage(app);
+const reqRef = collection(db, "requisicoes");
+
+let user = null;
+let isAdmin = false;
+let requisicoes = [];
+let selectedId = null;
+let editingId = null;
+let viewMode = "kanban";
+
+const statuses = [
+  ["nova","Nova"],
+  ["recebida","Recebida"],
+  ["cotacao","Em cotação"],
+  ["autorizada","Compra autorizada"],
+  ["comprada","Comprada / concluída"],
+  ["recusada","Recusada"]
+];
+
+const $ = id => document.getElementById(id);
+
+function esc(s){
+  return String(s ?? "").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
+}
+function showToast(msg){
+  const t=$("toast"); t.textContent=msg; t.classList.add("show");
+  clearTimeout(showToast._timer); showToast._timer=setTimeout(()=>t.classList.remove("show"),2800);
+}
+function fmtDate(v){
+  if(!v) return "—";
+  const d = typeof v === "string" ? new Date(v+"T00:00:00") : (v.toDate ? v.toDate() : new Date(v));
+  return isNaN(d) ? "—" : d.toLocaleDateString("pt-BR");
+}
+function nowLabel(){
+  return new Date().toLocaleString("pt-BR");
+}
+function priorityLabel(p){
+  return p==="urgente" ? "🔴 Urgente" : p==="cotar" ? "🟢 Pode aguardar cotação" : "🟠 Normal";
+}
+function statusLabel(s){
+  return statuses.find(x=>x[0]===s)?.[1] || s;
+}
+function safeUrl(raw){
+  const v=(raw||"").trim();
+  if(!v) return "";
+  try{
+    const u=new URL(v);
+    return /^https?:$/i.test(u.protocol) ? u.href : "";
+  }catch{ return ""; }
+}
+
+async function compressImage(file){
+  if(!file.type.startsWith("image/")) return file;
+  const img=new Image();
+  const url=URL.createObjectURL(file);
+  try{
+    await new Promise((res,rej)=>{img.onload=res;img.onerror=rej;img.src=url});
+    const max=1400;
+    const scale=Math.min(1,max/Math.max(img.width,img.height));
+    const c=document.createElement("canvas");
+    c.width=Math.max(1,Math.round(img.width*scale));
+    c.height=Math.max(1,Math.round(img.height*scale));
+    c.getContext("2d").drawImage(img,0,0,c.width,c.height);
+    return await new Promise(resolve=>c.toBlob(
+      blob=>resolve(blob || file),"image/jpeg",.82
+    ));
+  }finally{URL.revokeObjectURL(url)}
+}
+
+async function uploadPhoto(file, requestId, itemIndex){
+  const blob=await compressImage(file);
+  const ext="jpg";
+  const filename=`${Date.now()}_${Math.random().toString(36).slice(2,8)}.${ext}`;
+  const path=`requisicoes/${requestId}/item_${itemIndex}/${filename}`;
+  const r=ref(storage,path);
+  await uploadBytes(r,blob,{contentType:"image/jpeg"});
+  return await getDownloadURL(r);
+}
+
+function currentDraftItems(){
+  return [...document.querySelectorAll(".item-row")].map((row,idx)=>({
+    id:row.dataset.id || `item_${Date.now()}_${idx}`,
+    produto:row.querySelector(".item-prod").value.trim(),
+    quantidade:row.querySelector(".item-qtd").value.trim(),
+    unidade:row.querySelector(".item-un").value.trim(),
+    referencia:row.querySelector(".item-ref").value.trim(),
+    links:[...row.querySelectorAll(".item-link")].map(x=>safeUrl(x.value)).filter(Boolean),
+    photos:JSON.parse(row.dataset.photos || "[]"),
+    pendingFiles:[...row.querySelector(".item-files").files]
+  })).filter(x=>x.produto || x.quantidade || x.referencia || x.links.length || x.photos.length || x.pendingFiles.length);
+}
+
+function addItemRow(item={}){
+  const row=document.createElement("div");
+  row.className="item-row";
+  row.dataset.id=item.id || "";
+  row.dataset.photos=JSON.stringify(item.photos || []);
+  row.innerHTML=`
+    <div class="item-head">
+      <strong>Item</strong>
+      <div class="item-actions">
+        <button type="button" class="ghost add-link-btn">+ Link</button>
+        <button type="button" class="danger remove-item-btn">Remover</button>
+      </div>
+    </div>
+    <div class="grid3">
+      <input class="field item-prod" placeholder="Produto / peça / serviço" value="${esc(item.produto||"")}">
+      <input class="field item-qtd" type="number" min="0.001" step="0.001" placeholder="Quantidade" value="${esc(item.quantidade||"")}">
+      <input class="field item-un" placeholder="Unidade (un, L, kg...)" value="${esc(item.unidade||"un")}">
+    </div>
+    <div class="field" style="margin-top:8px;margin-bottom:0">
+      <label>Código / referência / marca (opcional)</label>
+      <input class="item-ref" placeholder="Ex.: SJ17532, 275/80 R22.5, SKF..." value="${esc(item.referencia||"")}">
+    </div>
+    <div class="link-container"></div>
+    <div class="photo-zone">
+      <label style="display:block;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Fotos da peça / equipamento</label>
+      <input class="item-files" type="file" accept="image/*" multiple>
+      <div class="photo-list"></div>
+      <div class="upload-state">Você pode anexar várias fotos. As imagens são reduzidas automaticamente antes do envio.</div>
+    </div>
+  `;
+  const linkContainer=row.querySelector(".link-container");
+  function renderLinks(){
+    linkContainer.innerHTML="";
+    (item.links||[]).forEach((url,i)=>{
+      const div=document.createElement("div"); div.className="link-row";
+      div.innerHTML=`<input class="item-link" placeholder="https://..." value="${esc(url)}"><button type="button" class="danger">×</button>`;
+      div.querySelector("button").onclick=()=>{item.links.splice(i,1);renderLinks()};
+      linkContainer.appendChild(div);
+    });
+  }
+  renderLinks();
+  row.querySelector(".add-link-btn").onclick=()=>{item.links=item.links||[];item.links.push("");renderLinks()};
+  row.querySelector(".remove-item-btn").onclick=()=>row.remove();
+
+  const photoList=row.querySelector(".photo-list");
+  function renderPhotos(){
+    photoList.innerHTML="";
+    (item.photos||[]).forEach((u,i)=>{
+      const wrap=document.createElement("div");wrap.className="photo-thumb";
+      wrap.innerHTML=`<a href="${esc(u)}" target="_blank"><img src="${esc(u)}" alt="Foto"></a><button type="button">×</button>`;
+      wrap.querySelector("button").onclick=()=>{item.photos.splice(i,1);row.dataset.photos=JSON.stringify(item.photos);renderPhotos()};
+      photoList.appendChild(wrap);
+    });
+  }
+  renderPhotos();
+  row.querySelector(".item-files").addEventListener("change",()=> {
+    const files=[...row.querySelector(".item-files").files];
+    row.dataset.pendingCount=String(files.length);
+    row.querySelector(".upload-state").textContent=files.length ? `${files.length} foto(s) aguardando envio.` : "As imagens são reduzidas automaticamente antes do envio.";
+  });
+
+  $("items").appendChild(row);
+}
+
+function resetForm(){
+  editingId=null;
+  $("formTitle").textContent="Nova requisição";
+  $("fSolicitante").value=user?.email||"";
+  $("fSetor").value="Oficina";
+  $("fEquipamento").value="";
+  $("fPatrimonio").value="";
+  $("fPrioridade").value="normal";
+  $("fDataNecessaria").value="";
+  $("fObs").value="";
+  $("items").innerHTML="";
+  addItemRow();
+  $("editNote").classList.add("hidden");
+}
+function openNew(){
+  resetForm();
+  $("formModal").classList.add("open");
+}
+function openEdit(r){
+  editingId=r.id;
+  $("formTitle").textContent="Editar requisição";
+  $("fSolicitante").value=r.solicitanteNome || r.solicitanteEmail || "";
+  $("fSetor").value=r.setor || "Oficina";
+  $("fEquipamento").value=r.equipamento || "";
+  $("fPatrimonio").value=r.patrimonio || "";
+  $("fPrioridade").value=r.prioridade || "normal";
+  $("fDataNecessaria").value=r.dataNecessaria || "";
+  $("fObs").value=r.observacao || "";
+  $("items").innerHTML="";
+  (r.itens?.length?r.itens:[{}]).forEach(addItemRow);
+  $("editNote").classList.toggle("hidden",r.status==="nova");
+  $("formModal").classList.add("open");
+}
+
+async function saveRequest(){
+  const items=currentDraftItems();
+  if(!items.length){showToast("Adicione pelo menos um item.");return}
+  for(const x of items){
+    if(!x.produto){showToast("Preencha o produto/peça em todos os itens.");return}
+    if(!x.quantidade){showToast("Preencha a quantidade em todos os itens.");return}
+  }
+
+  const base={
+    solicitanteEmail:user.email,
+    solicitanteNome:$("fSolicitante").value.trim() || user.email,
+    setor:$("fSetor").value,
+    equipamento:$("fEquipamento").value.trim(),
+    patrimonio:$("fPatrimonio").value.trim(),
+    prioridade:$("fPrioridade").value,
+    dataNecessaria:$("fDataNecessaria").value || "",
+    observacao:$("fObs").value.trim(),
+    updatedAt:serverTimestamp()
+  };
+
+  try{
+    let id=editingId;
+    if(editingId){
+      const old=requisicoes.find(r=>r.id===editingId);
+      // Reenvia apenas novos arquivos; URLs antigas continuam preservadas.
+      for(let i=0;i<items.length;i++){
+        const row=document.querySelectorAll(".item-row")[i];
+        const files=[...row.querySelector(".item-files").files];
+        for(const file of files){
+          const url=await uploadPhoto(file,editingId,i);
+          items[i].photos.push(url);
+        }
+        delete items[i].pendingFiles;
+      }
+      await updateDoc(doc(db,"requisicoes",editingId),{...base,itens:items});
+      showToast("Requisição atualizada.");
+    }else{
+      const refDoc=await addDoc(reqRef,{
+        ...base,
+        status:"nova",
+        createdAt:serverTimestamp(),
+        createdBy:user.uid,
+        itens:items.map(x=>({...x,photos:[]})),
+      });
+      id=refDoc.id;
+      for(let i=0;i<items.length;i++){
+        const row=document.querySelectorAll(".item-row")[i];
+        const files=[...row.querySelector(".item-files").files];
+        const urls=[];
+        for(const file of files) urls.push(await uploadPhoto(file,id,i));
+        items[i].photos=urls;
+      }
+      await updateDoc(doc(db,"requisicoes",id),{itens:items});
+      showToast("Requisição enviada para Compras.");
+    }
+    $("formModal").classList.remove("open");
+  }catch(e){
+    console.error(e);
+    showToast("Não foi possível salvar. Verifique conexão e regras do Firebase.");
+  }
+}
+
+function filterReqs(){
+  const q=$("search").value.toLowerCase().trim();
+  const p=$("filterPriority").value;
+  const s=$("filterSector").value;
+  return requisicoes.filter(r=>{
+    if(p && r.prioridade!==p) return false;
+    if(s && r.setor!==s) return false;
+    const blob=JSON.stringify({
+      ...r,itens:(r.itens||[]).map(x=>({produto:x.produto,referencia:x.referencia}))
+    }).toLowerCase();
+    return !q || blob.includes(q);
+  });
+}
+
+function cardHtml(r){
+  const imgs=(r.itens||[]).flatMap(x=>x.photos||[]).slice(0,4);
+  const itemText=(r.itens||[]).map(x=>`${x.produto} (${x.quantidade} ${x.unidade||"un"})`).join(" • ");
+  return `
+  <div class="card" data-id="${esc(r.id)}">
+    <div class="card-top">
+      <div class="card-title">${esc(itemText||"Requisição sem item")}</div>
+      <span class="tag ${r.prioridade==="urgente"?"tag-urgent":r.prioridade==="cotar"?"tag-quote":"tag-normal"}">${esc(priorityLabel(r.prioridade))}</span>
+    </div>
+    <div class="meta">
+      <div><strong>Solicitante:</strong> ${esc(r.solicitanteNome||r.solicitanteEmail)}</div>
+      <div><strong>Equipamento:</strong> ${esc(r.equipamento||"Não informado")}</div>
+      <div><strong>Setor:</strong> ${esc(r.setor||"—")}</div>
+      <div><strong>Necessário:</strong> ${esc(fmtDate(r.dataNecessaria))}</div>
+    </div>
+    ${imgs.length?`<div class="preview">${imgs.map(u=>`<img src="${esc(u)}" alt="Foto">`).join("")}</div>`:""}
+    <div class="card-footer"><span>${(r.itens||[]).length} item(ns)</span><span>${fmtDate(r.createdAt)}</span></div>
+  </div>`;
+}
+
+function render(){
+  const data=filterReqs();
+  $("kTotal").textContent=requisicoes.length;
+  $("kNew").textContent=requisicoes.filter(r=>r.status==="nova").length;
+  $("kUrgent").textContent=requisicoes.filter(r=>r.prioridade==="urgente" && !["comprada","recusada"].includes(r.status)).length;
+  $("kQuote").textContent=requisicoes.filter(r=>r.status==="cotacao").length;
+  $("kBought").textContent=requisicoes.filter(r=>r.status==="comprada").length;
+  $("kMy").textContent=requisicoes.filter(r=>r.solicitanteEmail===user?.email).length;
+
+  if(viewMode==="list"){renderList(data);$("board").style.display="none";$("listView").style.display="block";}
+  else{
+    $("board").style.display="grid";$("listView").style.display="none";
+    $("board").innerHTML=statuses.map(([st,label])=>{
+      const arr=data.filter(r=>r.status===st);
+      return `<div class="col" data-status="${st}">
+        <div class="col-head"><span class="name">${label}</span><span class="count">${arr.length}</span></div>
+        <div class="col-body">${arr.length?arr.map(cardHtml).join(""):`<div class="empty">Nenhuma requisição</div>`}</div>
+      </div>`
+    }).join("");
+  }
+
+  document.querySelectorAll(".card").forEach(c=>c.onclick=()=>openDetail(c.dataset.id));
+}
+
+function renderList(data){
+  $("listView").innerHTML=`
+  <table>
+    <thead><tr><th>Data</th><th>Status</th><th>Prioridade</th><th>Item</th><th>Qtd.</th><th>Equipamento</th><th>Solicitante</th><th>Setor</th></tr></thead>
+    <tbody>${data.map(r=>{
+      const first=(r.itens||[])[0]||{};
+      return `<tr data-id="${esc(r.id)}" style="cursor:pointer">
+        <td>${esc(fmtDate(r.createdAt))}</td>
+        <td>${esc(statusLabel(r.status))}</td>
+        <td>${esc(priorityLabel(r.prioridade))}</td>
+        <td>${esc(first.produto||"—")}</td>
+        <td>${esc(first.quantidade||"—")} ${esc(first.unidade||"")}</td>
+        <td>${esc(r.equipamento||"—")}</td>
+        <td>${esc(r.solicitanteNome||r.solicitanteEmail||"—")}</td>
+        <td>${esc(r.setor||"—")}</td>
+      </tr>`;
+    }).join("")}</tbody>
+  </table>`;
+  $("listView").querySelectorAll("tr[data-id]").forEach(tr=>tr.onclick=()=>openDetail(tr.dataset.id));
+}
+
+function openDetail(id){
+  const r=requisicoes.find(x=>x.id===id); if(!r)return;
+  selectedId=id;
+  $("dTitle").textContent=(r.itens||[])[0]?.produto || "Requisição";
+  $("dSub").textContent=`Criada em ${fmtDate(r.createdAt)} · ${r.id.slice(-8)}`;
+  $("dObs").textContent=r.observacao||"Nenhuma observação.";
+  $("dSolicitante").textContent=r.solicitanteNome||r.solicitanteEmail||"—";
+  $("dSetor").textContent=r.setor||"—";
+  $("dEquipamento").textContent=(r.equipamento||"—")+(r.patrimonio?` · ${r.patrimonio}`:"");
+  $("dPrioridade").textContent=priorityLabel(r.prioridade);
+  $("dData").textContent=fmtDate(r.dataNecessaria);
+  $("dStatus").value=r.status;
+
+  $("dItems").innerHTML=(r.itens||[]).map((it,i)=>`
+    <div class="item-card">
+      <div style="font-weight:800;font-size:13px">${i+1}. ${esc(it.produto||"—")}</div>
+      <div style="margin-top:5px"><span class="pill">Qtd: ${esc(it.quantidade||"—")} ${esc(it.unidade||"")}</span>
+        ${it.referencia?`<span class="pill">${esc(it.referencia)}</span>`:""}
+      </div>
+      ${it.links?.length?`<div class="links"><div class="detail-label" style="margin-top:7px">Links</div>${it.links.map(u=>`<a href="${esc(u)}" target="_blank" rel="noopener">↗ ${esc(u)}</a>`).join("")}</div>`:""}
+      ${it.photos?.length?`<div class="item-photo-grid">${it.photos.map(u=>`<a href="${esc(u)}" target="_blank"><img src="${esc(u)}" alt="Foto da peça"></a>`).join("")}</div>`:""}
+    </div>`).join("") || "<div class='empty'>Nenhum item.</div>";
+
+  const canEditOwn = !isAdmin && r.solicitanteEmail===user.email && r.status==="nova";
+  const canEditAdmin = isAdmin;
+  $("editRequest").classList.toggle("hidden",!(canEditOwn||canEditAdmin));
+  $("deleteRequest").classList.toggle("hidden",!isAdmin);
+  $("dStatus").disabled=!isAdmin;
+  $("saveStatus").classList.toggle("hidden",!isAdmin);
+  $("adminOnly").classList.toggle("hidden",isAdmin);
+
+  $("detailModal").classList.add("open");
+}
+
+async function saveStatus(){
+  if(!isAdmin || !selectedId)return;
+  const st=$("dStatus").value;
+  try{
+    await updateDoc(doc(db,"requisicoes",selectedId),{status:st,updatedAt:serverTimestamp()});
+    showToast("Status atualizado.");
+    openDetail(selectedId);
+  }catch(e){console.error(e);showToast("Não foi possível atualizar o status.");}
+}
+
+async function deleteRequest(){
+  if(!isAdmin || !selectedId)return;
+  if(!confirm("Excluir esta requisição? O registro será removido do painel."))return;
+  try{
+    await deleteDoc(doc(db,"requisicoes",selectedId));
+    $("detailModal").classList.remove("open");
+    showToast("Requisição excluída.");
+  }catch(e){console.error(e);showToast("Não foi possível excluir.");}
+}
+
+function exportCsv(){
+  const data=filterReqs();
+  const rows=[["ID","Data","Status","Prioridade","Solicitante","E-mail","Setor","Equipamento","Patrimônio","Data necessária","Observação","Itens"]];
+  data.forEach(r=>{
+    const items=(r.itens||[]).map(i=>`${i.produto} | ${i.quantidade} ${i.unidade||""} | ${i.referencia||""}`).join(" || ");
+    rows.push([r.id,fmtDate(r.createdAt),statusLabel(r.status),priorityLabel(r.prioridade),r.solicitanteNome,r.solicitanteEmail,r.setor,r.equipamento,r.patrimonio,r.dataNecessaria,r.observacao,items]);
+  });
+  const csv=rows.map(row=>row.map(v=>`"${String(v??"").replace(/"/g,'""')}"`).join(";")).join("\n");
+  const blob=new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`requisicoes_${new Date().toISOString().slice(0,10)}.csv`;a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+$("loginBtn").onclick=()=>{
+  $("loginError").textContent="";
+  const email=$("email").value.trim(), password=$("password").value;
+  if(!email||!password){$("loginError").textContent="Informe e-mail e senha.";return}
+  signInWithEmailAndPassword(auth,email,password).catch(()=>{$("loginError").textContent="E-mail ou senha incorretos.";});
+};
+$("password").addEventListener("keydown",e=>{if(e.key==="Enter")$("loginBtn").click()});
+$("logoutBtn").onclick=()=>signOut(auth);
+$("newBtn").onclick=openNew;
+$("addItem").onclick=()=>addItemRow();
+$("closeForm").onclick=$("cancelForm").onclick=()=>$("formModal").classList.remove("open");
+$("saveForm").onclick=saveRequest;
+$("closeDetail").onclick=()=>$("detailModal").classList.remove("open");
+$("saveStatus").onclick=saveStatus;
+$("deleteRequest").onclick=deleteRequest;
+$("editRequest").onclick=()=>{
+  const r=requisicoes.find(x=>x.id===selectedId); if(!r)return;
+  $("detailModal").classList.remove("open");openEdit(r);
+};
+$("search").oninput=render;
+$("filterPriority").onchange=render;
+$("filterSector").onchange=render;
+$("exportBtn").onclick=exportCsv;
+$("kanbanBtn").onclick=()=>{viewMode="kanban";$("kanbanBtn").classList.add("active");$("listBtn").classList.remove("active");render()};
+$("listBtn").onclick=()=>{viewMode="list";$("listBtn").classList.add("active");$("kanbanBtn").classList.remove("active");render()};
+$("formModal").onclick=e=>{if(e.target===$("formModal"))$("formModal").classList.remove("open")};
+$("detailModal").onclick=e=>{if(e.target===$("detailModal"))$("detailModal").classList.remove("open")};
+
+onAuthStateChanged(auth,(u)=>{
+  user=u;
+  if(!u){
+    $("login").classList.remove("hidden");$("app").classList.add("hidden");
+    return;
+  }
+  isAdmin=u.uid===ADMIN_UID;
+  $("login").classList.add("hidden");$("app").classList.remove("hidden");
+  $("userEmail").textContent=u.email||"Usuário autenticado";
+  $("roleBadge").textContent=isAdmin?"Administrador / Compras":"Solicitante";
+  $("sync").textContent="● Conectado à nuvem — atualização em tempo real";
+  subscribe();
+});
+
+let unsubscribe=null;
+function subscribe(){
+  if(unsubscribe)unsubscribe();
+  const q=query(reqRef,orderBy("createdAt","desc"));
+  unsubscribe=onSnapshot(q,(snap)=>{
+    requisicoes=snap.docs.map(d=>({id:d.id,...d.data()}));
+    render();
+  },err=>{
+    console.error(err);
+    $("sync").textContent="● Erro ao sincronizar — verifique as regras do Firebase";
+  });
+}
+</script>
+</body>
+</html>
