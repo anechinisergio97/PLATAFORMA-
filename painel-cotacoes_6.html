@@ -165,6 +165,28 @@
     padding:8px; border-radius:6px; cursor:pointer; font-size:12.5px; margin-top:2px;
   }
   .btn-add-forn:hover{color:var(--text); border-color:var(--accent-dim);}
+  .forn-edit-row .produtos-list{margin-bottom:6px;}
+  .forn-edit-row .produto-row{
+    background:var(--panel-3); border:1px solid var(--line); border-radius:6px; padding:8px; margin-bottom:6px;
+  }
+  .forn-edit-row .produto-row input[type="text"]{margin-bottom:6px;}
+  .forn-edit-row .produto-row .produto-grid{display:grid; grid-template-columns:60px 1fr 90px 22px; gap:6px; align-items:center;}
+  .forn-edit-row .produto-row .produto-subtotal{
+    background:var(--bg); border:1px solid var(--line); color:var(--accent); font-weight:700;
+    padding:7px 6px; border-radius:6px; font-size:12px; text-align:right;
+  }
+  .forn-edit-row .remove-produto{background:none; border:none; color:var(--muted); cursor:pointer; font-size:15px; line-height:1; padding:0;}
+  .forn-edit-row .remove-produto:hover{color:var(--danger);}
+  .btn-add-produto{
+    background:none; border:1px dashed var(--line); color:var(--muted); width:100%;
+    padding:6px; border-radius:6px; cursor:pointer; font-size:11.5px; margin-bottom:8px;
+  }
+  .btn-add-produto:hover{color:var(--text); border-color:var(--accent-dim);}
+  .forn-total-row{
+    display:flex; justify-content:space-between; align-items:center; background:var(--panel-3);
+    border:1px solid var(--line); border-radius:6px; padding:8px 10px; margin-bottom:8px;
+    font-weight:700; color:var(--accent); font-size:13px;
+  }
   .saving-hint{font-size:11px; color:var(--ok); margin-top:4px;}
   .sync-dot{display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:5px; vertical-align:middle;}
   .sync-dot.online{background:var(--ok);}
@@ -322,6 +344,10 @@
     }
     #print-area .print-date{margin-top:22px; font-size:12px; color:#333;}
     #print-area .print-footer{margin-top:24px; font-size:11px; color:#777;}
+    #print-area .print-forn-block{margin-top:22px; page-break-inside:avoid;}
+    #print-area .print-forn-block h3{font-size:14px; margin:0 0 6px;}
+    #print-area .print-forn-total{text-align:right; font-weight:bold; font-size:12.5px; margin-top:4px;}
+    #print-area .print-forn-block.print-menor-preco{background:#fffbe0; padding:10px; border:1px solid #fff3b0; -webkit-print-color-adjust:exact; print-color-adjust:exact;}
   }
   body.readonly-mode #btn-new,
   body.readonly-mode #btn-import,
@@ -1113,42 +1139,98 @@ document.querySelectorAll('.col').forEach(col => {
 const overlay = document.getElementById('modal-overlay');
 const fornListEl = document.getElementById('forn-list');
 
+function produtoSubtotal(p){
+  const qtd = parseFloat((p.quantidade || '').toString().replace(',', '.')) || 0;
+  const vUnit = parsePrice(p.valorUnitario) || 0;
+  return qtd * vUnit;
+}
+
+function recalcFornTotal(row){
+  const total = (row.produtos || []).reduce((sum, p) => sum + produtoSubtotal(p), 0);
+  row.preco = formatMoney(total);
+}
+
 function renderFornRows(){
   fornListEl.innerHTML = '';
   fornRows.forEach((row, idx) => {
+    if(!row.produtos || !row.produtos.length){
+      row.produtos = [{id: uid('p'), descricao:'', quantidade:'', valorUnitario:''}];
+    }
+    recalcFornTotal(row);
+
     const div = document.createElement('div');
     div.className = 'forn-edit-row';
-    const qtd = parseFloat((row.quantidade || '').toString().replace(',', '.')) || 0;
-    const vUnit = parsePrice(row.valorUnitario) || 0;
-    const temQtdOuUnit = (row.quantidade && row.quantidade.toString().trim() !== '') || (row.valorUnitario && row.valorUnitario.toString().trim() !== '');
-    const total = temQtdOuUnit ? (qtd * vUnit) : (parsePrice(row.preco) || 0);
+
+    let produtosHtml = '';
+    row.produtos.forEach((p) => {
+      const sub = produtoSubtotal(p);
+      produtosHtml += `
+        <div class="produto-row">
+          <input type="text" placeholder="Descrição do produto" class="produto-desc-input" value="${escapeHtml(p.descricao || '')}">
+          <div class="produto-grid">
+            <input type="text" placeholder="Qtd" class="produto-qtd-input" value="${escapeHtml(p.quantidade || '')}">
+            <input type="text" placeholder="Valor unitário R$" class="produto-vunit-input" value="${escapeHtml(p.valorUnitario || '')}">
+            <div class="produto-subtotal">R$ ${formatMoney(sub)}</div>
+            <button type="button" class="remove-produto" title="Remover produto">×</button>
+          </div>
+        </div>
+      `;
+    });
+
     div.innerHTML = `
-      <input type="text" placeholder="Fornecedor" class="forn-nome-input" list="lista-fornecedores-cadastrados" value="${escapeHtml(row.nome)}" style="margin-bottom:6px;">
-      <div class="grid3">
-        <input type="text" placeholder="Qtd" class="forn-qtd-input" value="${escapeHtml(row.quantidade || '')}">
-        <input type="text" placeholder="Valor unitário R$" class="forn-vunit-input" value="${escapeHtml(row.valorUnitario || '')}">
-        <div class="forn-total-display">R$ ${formatMoney(total)}</div>
-      </div>
+      <input type="text" placeholder="Fornecedor" class="forn-nome-input" list="lista-fornecedores-cadastrados" value="${escapeHtml(row.nome)}" style="margin-bottom:8px;">
+      <div class="produtos-list">${produtosHtml}</div>
+      <button type="button" class="btn-add-produto">+ Adicionar produto</button>
+      <div class="forn-total-row"><span>Total do fornecedor</span><span>R$ ${row.preco}</span></div>
       <textarea placeholder="Condições (prazo de pagamento, entrega, etc.)" class="forn-cond-input">${escapeHtml(row.condicoes)}</textarea>
       <div class="row-bottom">
         <label class="fechado-toggle">
           <input type="checkbox" class="forn-fechado-input" ${row.fechado ? 'checked' : ''}>
           Fornecedor fechado
         </label>
-        <button type="button" class="remove-forn" data-idx="${idx}">Remover</button>
+        <button type="button" class="remove-forn" data-idx="${idx}">Remover fornecedor</button>
       </div>
     `;
+
     div.querySelector('.forn-nome-input').addEventListener('input', (e) => row.nome = e.target.value);
-    div.querySelector('.forn-qtd-input').addEventListener('input', (e) => {
-      row.quantidade = e.target.value;
-      recalcTotal(row);
-      div.querySelector('.forn-total-display').textContent = 'R$ ' + row.preco;
+
+    const atualizarTotais = (pIdx) => {
+      recalcFornTotal(row);
+      const prodRow = div.querySelectorAll('.produto-row')[pIdx];
+      prodRow.querySelector('.produto-subtotal').textContent = 'R$ ' + formatMoney(produtoSubtotal(row.produtos[pIdx]));
+      div.querySelector('.forn-total-row span:last-child').textContent = 'R$ ' + row.preco;
+    };
+
+    div.querySelectorAll('.produto-desc-input').forEach((inp, pIdx) => {
+      inp.addEventListener('input', (e) => { row.produtos[pIdx].descricao = e.target.value; });
     });
-    div.querySelector('.forn-vunit-input').addEventListener('input', (e) => {
-      row.valorUnitario = e.target.value;
-      recalcTotal(row);
-      div.querySelector('.forn-total-display').textContent = 'R$ ' + row.preco;
+    div.querySelectorAll('.produto-qtd-input').forEach((inp, pIdx) => {
+      inp.addEventListener('input', (e) => {
+        row.produtos[pIdx].quantidade = e.target.value;
+        atualizarTotais(pIdx);
+      });
     });
+    div.querySelectorAll('.produto-vunit-input').forEach((inp, pIdx) => {
+      inp.addEventListener('input', (e) => {
+        row.produtos[pIdx].valorUnitario = e.target.value;
+        atualizarTotais(pIdx);
+      });
+    });
+    div.querySelectorAll('.remove-produto').forEach((btn, pIdx) => {
+      btn.addEventListener('click', () => {
+        if(row.produtos.length > 1){
+          row.produtos.splice(pIdx, 1);
+        } else {
+          row.produtos[0] = {id: uid('p'), descricao:'', quantidade:'', valorUnitario:''};
+        }
+        renderFornRows();
+      });
+    });
+    div.querySelector('.btn-add-produto').addEventListener('click', () => {
+      row.produtos.push({id: uid('p'), descricao:'', quantidade:'', valorUnitario:''});
+      renderFornRows();
+    });
+
     div.querySelector('.forn-cond-input').addEventListener('input', (e) => row.condicoes = e.target.value);
     div.querySelector('.forn-fechado-input').addEventListener('change', (e) => {
       fornRows.forEach(r => r.fechado = false);
@@ -1159,17 +1241,20 @@ function renderFornRows(){
       fornRows.splice(idx, 1);
       renderFornRows();
     });
+
     fornListEl.appendChild(div);
   });
 }
 
-function recalcTotal(row){
-  const qtd = parseFloat((row.quantidade || '').toString().replace(',', '.')) || 0;
-  const vUnit = parsePrice(row.valorUnitario) || 0;
-  const temQtdOuUnit = (row.quantidade && row.quantidade.toString().trim() !== '') || (row.valorUnitario && row.valorUnitario.toString().trim() !== '');
-  if(temQtdOuUnit){
-    row.preco = formatMoney(qtd * vUnit);
+function getProdutosForPrint(f){
+  if(f.produtos && f.produtos.length) return f.produtos;
+  if((f.quantidade && f.quantidade.toString().trim() !== '') || (f.valorUnitario && f.valorUnitario.toString().trim() !== '')){
+    return [{descricao:'', quantidade: f.quantidade || '', valorUnitario: f.valorUnitario || ''}];
   }
+  if(f.preco && f.preco.toString().trim() !== ''){
+    return [{descricao:'', quantidade:'1', valorUnitario: f.preco}];
+  }
+  return [];
 }
 
 function imprimirCotacao(id){
@@ -1181,20 +1266,50 @@ function imprimirCotacao(id){
     aprovada: 'Aprovada', perdida: 'Perdida / Recusada'
   }[c.status] || c.status;
 
-  const precos = (c.fornecedores || []).map(f => parsePrice(f.preco)).filter(v => v !== null);
+  const fornecedores = c.fornecedores || [];
+  const precos = fornecedores.map(f => parsePrice(f.preco)).filter(v => v !== null);
   const menorPreco = precos.length ? Math.min(...precos) : null;
 
-  let linhas = '';
-  (c.fornecedores || []).forEach(f => {
+  let resumoLinhas = '';
+  fornecedores.forEach(f => {
     const p = parsePrice(f.preco);
     const isMenor = menorPreco !== null && p === menorPreco;
-    linhas += `<tr class="${isMenor ? 'print-menor-preco' : ''}">
+    const produtos = getProdutosForPrint(f);
+    resumoLinhas += `<tr class="${isMenor ? 'print-menor-preco' : ''}">
       <td>${escapeHtml(f.nome)}${f.fechado ? ' <span class="print-fechado">(Fechado)</span>' : ''}</td>
-      <td>${escapeHtml(f.quantidade || '—')}</td>
-      <td>${f.valorUnitario ? 'R$ ' + escapeHtml(f.valorUnitario) : '—'}</td>
+      <td>${produtos.length}</td>
       <td>${f.preco ? 'R$ ' + escapeHtml(f.preco) : '—'}${isMenor ? ' <span class="print-menor-tag">MENOR PREÇO</span>' : ''}</td>
-      <td>${escapeHtml(f.condicoes || '—')}</td>
     </tr>`;
+  });
+
+  let detalhesHtml = '';
+  fornecedores.forEach(f => {
+    const produtos = getProdutosForPrint(f);
+    const p = parsePrice(f.preco);
+    const isMenor = menorPreco !== null && p === menorPreco;
+    let linhasProd = '';
+    produtos.forEach(prod => {
+      const qtd = parseFloat((prod.quantidade || '').toString().replace(',', '.')) || 0;
+      const vUnit = parsePrice(prod.valorUnitario) || 0;
+      const subtotal = qtd * vUnit;
+      linhasProd += `<tr>
+        <td>${escapeHtml(prod.descricao || c.produto)}</td>
+        <td>${escapeHtml(prod.quantidade || '—')}</td>
+        <td>${prod.valorUnitario ? 'R$ ' + escapeHtml(prod.valorUnitario) : '—'}</td>
+        <td>R$ ${formatMoney(subtotal)}</td>
+      </tr>`;
+    });
+    detalhesHtml += `
+      <div class="print-forn-block ${isMenor ? 'print-menor-preco' : ''}">
+        <h3>${escapeHtml(f.nome)}${f.fechado ? ' <span class="print-fechado">(Fechado)</span>' : ''}${isMenor ? ' <span class="print-menor-tag">MENOR PREÇO</span>' : ''}</h3>
+        <table>
+          <thead><tr><th>Produto</th><th>Qtd</th><th>Valor unitário</th><th>Subtotal</th></tr></thead>
+          <tbody>${linhasProd || '<tr><td colspan="4">Nenhum produto informado</td></tr>'}</tbody>
+        </table>
+        <div class="print-forn-total">Total ${escapeHtml(f.nome)}: R$ ${f.preco ? escapeHtml(f.preco) : '0,00'}</div>
+        ${f.condicoes ? `<div class="print-sub">Condições: ${escapeHtml(f.condicoes)}</div>` : ''}
+      </div>
+    `;
   });
 
   const hoje = new Date().toLocaleDateString('pt-BR');
@@ -1204,10 +1319,11 @@ function imprimirCotacao(id){
     <div class="print-sub">Status: ${statusLabel} · Prazo de resposta: ${c.prazo ? formatDate(c.prazo) : '—'} · Emitido em ${hoje}</div>
     <table>
       <thead>
-        <tr><th>Fornecedor</th><th>Qtd</th><th>Valor unitário</th><th>Valor total</th><th>Condições</th></tr>
+        <tr><th>Fornecedor</th><th>Qtd. itens</th><th>Valor total</th></tr>
       </thead>
-      <tbody>${linhas || '<tr><td colspan="5">Nenhum fornecedor cadastrado</td></tr>'}</tbody>
+      <tbody>${resumoLinhas || '<tr><td colspan="3">Nenhum fornecedor cadastrado</td></tr>'}</tbody>
     </table>
+    ${detalhesHtml}
     <div class="print-signature">
       <div>Assinatura do solicitante</div>
       <div>Comprador responsável</div>
@@ -1232,6 +1348,21 @@ function gerarPedidoCompra(id){
   const hoje = new Date().toLocaleDateString('pt-BR');
   const numeroPedido = 'PC-' + c.id.replace(/[^0-9]/g, '').slice(-8);
 
+  const produtos = getProdutosForPrint(fechado);
+  let linhasProd = '';
+  produtos.forEach(prod => {
+    const qtd = parseFloat((prod.quantidade || '').toString().replace(',', '.')) || 0;
+    const vUnit = parsePrice(prod.valorUnitario) || 0;
+    const subtotal = qtd * vUnit;
+    linhasProd += `<tr>
+      <td>${escapeHtml(fechado.nome)}</td>
+      <td>${escapeHtml(prod.descricao || c.produto)}</td>
+      <td>${escapeHtml(prod.quantidade || '—')}</td>
+      <td>${prod.valorUnitario ? 'R$ ' + escapeHtml(prod.valorUnitario) : '—'}</td>
+      <td>R$ ${formatMoney(subtotal)}</td>
+    </tr>`;
+  });
+
   document.getElementById('print-area').innerHTML = `
     <h1>Pedido de Compra — ${numeroPedido}</h1>
     <div class="print-sub">Emitido em ${hoje}</div>
@@ -1239,16 +1370,9 @@ function gerarPedidoCompra(id){
       <thead>
         <tr><th>Fornecedor</th><th>Produto</th><th>Qtd</th><th>Valor unitário</th><th>Valor total</th></tr>
       </thead>
-      <tbody>
-        <tr>
-          <td>${escapeHtml(fechado.nome)}</td>
-          <td>${escapeHtml(c.produto)}</td>
-          <td>${escapeHtml(fechado.quantidade || '—')}</td>
-          <td>${fechado.valorUnitario ? 'R$ ' + escapeHtml(fechado.valorUnitario) : '—'}</td>
-          <td>${fechado.preco ? 'R$ ' + escapeHtml(fechado.preco) : '—'}</td>
-        </tr>
-      </tbody>
+      <tbody>${linhasProd || '<tr><td colspan="5">Nenhum produto informado</td></tr>'}</tbody>
     </table>
+    <div class="print-forn-total" style="text-align:right; margin-top:6px;">Total do pedido: R$ ${fechado.preco ? escapeHtml(fechado.preco) : '0,00'}</div>
     <div class="print-sub" style="margin-top:16px;"><strong>Condições:</strong> ${escapeHtml(fechado.condicoes || 'Não informadas')}</div>
     <div class="print-signature">
       <div>Assinatura do solicitante</div>
@@ -1263,7 +1387,7 @@ function gerarPedidoCompra(id){
 }
 
 document.getElementById('btn-add-forn').addEventListener('click', () => {
-  fornRows.push({nome:'', quantidade:'', valorUnitario:'', preco:'', condicoes:'', fechado:false});
+  fornRows.push({nome:'', preco:'', condicoes:'', fechado:false, produtos:[{id: uid('p'), descricao:'', quantidade:'', valorUnitario:''}]});
   renderFornRows();
 });
 
@@ -1276,8 +1400,20 @@ function openModal(id){
   document.getElementById('f-preco-negociado').value = c ? (c.precoNegociado || '') : '';
   document.getElementById('f-data-aprovacao').value = c ? (c.dataAprovacaoISO || '') : '';
   fornRows = c && c.fornecedores && c.fornecedores.length
-    ? c.fornecedores.map(f => ({...f}))
-    : [{nome:'', quantidade:'', valorUnitario:'', preco:'', condicoes:'', fechado:false}];
+    ? c.fornecedores.map(f => {
+        const row = {...f};
+        if(!row.produtos || !row.produtos.length){
+          if((row.quantidade && row.quantidade.toString().trim() !== '') || (row.valorUnitario && row.valorUnitario.toString().trim() !== '')){
+            row.produtos = [{id: uid('p'), descricao:'', quantidade: row.quantidade || '', valorUnitario: row.valorUnitario || ''}];
+          } else if(row.preco && row.preco.toString().trim() !== ''){
+            row.produtos = [{id: uid('p'), descricao:'', quantidade:'1', valorUnitario: row.preco}];
+          } else {
+            row.produtos = [{id: uid('p'), descricao:'', quantidade:'', valorUnitario:''}];
+          }
+        }
+        return row;
+      })
+    : [{nome:'', preco:'', condicoes:'', fechado:false, produtos:[{id: uid('p'), descricao:'', quantidade:'', valorUnitario:''}]}];
   renderFornRows();
   overlay.classList.add('open');
 }
@@ -1298,15 +1434,25 @@ document.getElementById('btn-save').addEventListener('click', () => {
   }
   const fornecedores = fornRows
     .filter(f => f.nome && f.nome.trim())
-    .map(f => ({
-      id: f.id || uid('f'),
-      nome: f.nome.trim(),
-      quantidade: (f.quantidade || '').toString().trim(),
-      valorUnitario: (f.valorUnitario || '').toString().trim(),
-      preco: (f.preco || '').trim(),
-      condicoes: (f.condicoes || '').trim(),
-      fechado: !!f.fechado
-    }));
+    .map(f => {
+      const produtos = (f.produtos || [])
+        .filter(p => (p.descricao && p.descricao.trim()) || (p.quantidade && p.quantidade.toString().trim()) || (p.valorUnitario && p.valorUnitario.toString().trim()))
+        .map(p => ({
+          id: p.id || uid('p'),
+          descricao: (p.descricao || '').trim(),
+          quantidade: (p.quantidade || '').toString().trim(),
+          valorUnitario: (p.valorUnitario || '').toString().trim()
+        }));
+      const totalCalculado = produtos.reduce((sum, p) => sum + produtoSubtotal(p), 0);
+      return {
+        id: f.id || uid('f'),
+        nome: f.nome.trim(),
+        produtos,
+        preco: produtos.length ? formatMoney(totalCalculado) : (f.preco || '').toString().trim(),
+        condicoes: (f.condicoes || '').trim(),
+        fechado: !!f.fechado
+      };
+    });
 
   fornecedores.forEach(f => registrarFornecedorSeNovo(f.nome, isAdmin));
 
