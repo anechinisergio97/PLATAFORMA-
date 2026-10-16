@@ -170,6 +170,9 @@
     text-transform:uppercase; letter-spacing:.06em; color:var(--accent); padding:4px 2px;
     border-bottom:1px solid var(--line); margin-top:4px;
   }
+  .mes-header{cursor:pointer; user-select:none;}
+  .mes-header:hover{color:var(--text);}
+  .mes-header .mes-seta{display:inline-block; width:12px; font-size:9px;}
   .mes-header .mes-count{background:var(--panel-3); color:var(--muted); border-radius:10px; padding:1px 7px; font-size:10.5px;}
   .btn-copy-produtos{
     background:none; border:1px dashed var(--line); color:var(--muted); width:100%;
@@ -952,6 +955,9 @@ function escapeHtml(s){
   return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 }
 
+let mesesColapsados = new Set();
+try{ mesesColapsados = new Set(JSON.parse(localStorage.getItem('meses-colapsados') || '[]')); }catch(e){}
+
 function render(){
   const statuses = ['enviada','analise','finalizacao','aprovada','perdida'];
   statuses.forEach(s => {
@@ -980,10 +986,17 @@ function render(){
             rotulo = meses[parseInt(mes, 10) - 1] + ' de ' + ano;
           }
           const h = document.createElement('div');
-          h.className = 'mes-header';
-          h.innerHTML = `<span>${rotulo}</span><span class="mes-count">${qtdMes}</span>`;
+          const fechadoMes = mesesColapsados.has(chave);
+          h.className = 'mes-header' + (fechadoMes ? ' colapsado' : '');
+          h.innerHTML = `<span><span class="mes-seta">${fechadoMes ? '▶' : '▼'}</span> ${rotulo}</span><span class="mes-count">${qtdMes}</span>`;
+          h.addEventListener('click', () => {
+            if(mesesColapsados.has(chave)) mesesColapsados.delete(chave); else mesesColapsados.add(chave);
+            try{ localStorage.setItem('meses-colapsados', JSON.stringify([...mesesColapsados])); }catch(e){}
+            render();
+          });
           body.appendChild(h);
         }
+        if(mesesColapsados.has(chave)) return;
       }
       const card = document.createElement('div');
       card.className = 'card';
