@@ -360,6 +360,10 @@
     }
     #print-area .print-date{margin-top:22px; font-size:12px; color:#333;}
     #print-area .print-footer{margin-top:24px; font-size:11px; color:#777;}
+    #print-area .print-page{page-break-after:always; break-after:page; page-break-inside:avoid;}
+    #print-area .print-page-last{page-break-after:auto; break-after:auto;}
+    #print-area .print-page-head{font-size:11px; color:#777; border-bottom:1px solid #ddd; padding-bottom:4px; margin-bottom:14px;}
+    #print-area .print-produto-titulo{font-size:17px; margin:14px 0 6px;}
     #print-area .print-forn-block{margin-top:22px; page-break-inside:avoid;}
     #print-area .print-forn-block h3{font-size:14px; margin:0 0 6px;}
     #print-area .print-forn-total{text-align:right; font-weight:bold; font-size:12.5px; margin-top:4px;}
@@ -1412,7 +1416,7 @@ function imprimirCotacao(id){
   });
 
   let blocosHtml = '';
-  grupos.forEach(g => {
+  grupos.forEach((g, gi) => {
     const unitarios = g.ofertas.filter(o => o.unit !== null).map(o => o.unit);
     const menorUnit = unitarios.length > 1 ? Math.min(...unitarios) : (unitarios.length === 1 ? unitarios[0] : null);
     const temDesc = g.ofertas.some(o => o.desconto > 0);
@@ -1427,8 +1431,9 @@ function imprimirCotacao(id){
       </tr>`;
     }).join('');
     blocosHtml += `
-      <div class="print-forn-block">
-        <h3>${escapeHtml(g.nome)}</h3>
+      <div class="print-page">
+        ${gi > 0 ? `<div class="print-page-head">Cotação — ${escapeHtml(c.produto)}</div>` : ''}
+        <h3 class="print-produto-titulo">Produto ${gi + 1} de ${grupos.length}: ${escapeHtml(g.nome)}</h3>
         <table>
           <thead><tr><th>Fornecedor</th><th>Qtd</th><th>Valor unitário</th>${temDesc ? '<th>Desconto</th>' : ''}<th>Valor total</th></tr></thead>
           <tbody>${linhas}</tbody>
@@ -1454,20 +1459,21 @@ function imprimirCotacao(id){
     <h1>Cotação — ${escapeHtml(c.produto)}</h1>
     <div class="print-sub">Status: ${statusLabel} · Prazo de resposta: ${c.prazo ? formatDate(c.prazo) : '—'} · Emitido em ${hoje}</div>
     ${blocosHtml || '<p>Nenhum produto informado</p>'}
-    <div class="print-forn-block">
-      <h3>Resumo por fornecedor</h3>
+    <div class="print-page print-page-last">
+      <div class="print-page-head">Cotação — ${escapeHtml(c.produto)}</div>
+      <h3 class="print-produto-titulo">Resumo por fornecedor</h3>
       <table>
         <thead><tr><th>Fornecedor</th><th>Total geral</th><th>Condições</th></tr></thead>
         <tbody>${resumoLinhas || '<tr><td colspan="3">Nenhum fornecedor cadastrado</td></tr>'}</tbody>
       </table>
+      <div class="print-signature">
+        <div>Assinatura do solicitante</div>
+        <div>Comprador responsável</div>
+        <div>Liberado por</div>
+      </div>
+      <div class="print-date">Data: ____ / ____ / ______</div>
+      <div class="print-footer">Documento gerado pelo Painel de Cotações.</div>
     </div>
-    <div class="print-signature">
-      <div>Assinatura do solicitante</div>
-      <div>Comprador responsável</div>
-      <div>Liberado por</div>
-    </div>
-    <div class="print-date">Data: ____ / ____ / ______</div>
-    <div class="print-footer">Documento gerado pelo Painel de Cotações.</div>
   `;
 
   window.print();
