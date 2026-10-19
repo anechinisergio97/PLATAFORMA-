@@ -1329,63 +1329,77 @@ function imprimirCotacao(id){
   }[c.status] || c.status;
 
   const fornecedores = c.fornecedores || [];
-  const precos = fornecedores.map(f => parsePrice(f.preco)).filter(v => v !== null);
-  const menorPreco = precos.length ? Math.min(...precos) : null;
+  const norm = (t) => (t || '').toString().trim().toLowerCase().replace(/\s+/g, ' ');
 
-  let resumoLinhas = '';
+  // Agrupa por produto: cada produto traz a oferta de cada fornecedor
+  const grupos = [];
+  const mapa = {};
   fornecedores.forEach(f => {
-    const p = parsePrice(f.preco);
-    const isMenor = menorPreco !== null && p === menorPreco;
-    const produtos = getProdutosForPrint(f);
-    resumoLinhas += `<tr class="${isMenor ? 'print-menor-preco' : ''}">
-      <td>${escapeHtml(f.nome)}${f.fechado ? ' <span class="print-fechado">(Fechado)</span>' : ''}</td>
-      <td>${produtos.length}</td>
-      <td>${f.preco ? 'R$ ' + escapeHtml(f.preco) : '—'}${isMenor ? ' <span class="print-menor-tag">MENOR PREÇO</span>' : ''}</td>
-    </tr>`;
-  });
-
-  let detalhesHtml = '';
-  fornecedores.forEach(f => {
-    const produtos = getProdutosForPrint(f);
-    const p = parsePrice(f.preco);
-    const isMenor = menorPreco !== null && p === menorPreco;
-    let linhasProd = '';
-    produtos.forEach(prod => {
+    getProdutosForPrint(f).forEach(prod => {
+      const nome = (prod.descricao || '').trim() || c.produto;
+      const chave = norm(nome);
+      if(!mapa[chave]){
+        mapa[chave] = { nome, ofertas: [] };
+        grupos.push(mapa[chave]);
+      }
       const qtd = parseFloat((prod.quantidade || '').toString().replace(',', '.')) || 0;
-      const vUnit = parsePrice(prod.valorUnitario) || 0;
-      const subtotal = qtd * vUnit;
-      linhasProd += `<tr>
-        <td>${escapeHtml(prod.descricao || c.produto)}</td>
-        <td>${escapeHtml(prod.quantidade || '—')}</td>
-        <td>${prod.valorUnitario ? 'R$ ' + escapeHtml(prod.valorUnitario) : '—'}</td>
-        <td>R$ ${formatMoney(subtotal)}</td>
-      </tr>`;
+      const vUnit = parsePrice(prod.valorUnitario);
+      const cotou = (prod.valorUnitario || '').toString().trim() !== '' && vUnit !== null;
+      mapa[chave].ofertas.push({
+        forn: f, quantidade: prod.quantidade || '', valorUnitario: prod.valorUnitario || '',
+        subtotal: qtd * (vUnit || 0), unit: cotou ? vUnit : null
+      });
     });
-    detalhesHtml += `
-      <div class="print-forn-block ${isMenor ? 'print-menor-preco' : ''}">
-        <h3>${escapeHtml(f.nome)}${f.fechado ? ' <span class="print-fechado">(Fechado)</span>' : ''}${isMenor ? ' <span class="print-menor-tag">MENOR PREÇO</span>' : ''}</h3>
-        <table>
-          <thead><tr><th>Produto</th><th>Qtd</th><th>Valor unitário</th><th>Subtotal</th></tr></thead>
-          <tbody>${linhasProd || '<tr><td colspan="4">Nenhum produto informado</td></tr>'}</tbody>
-        </table>
-        <div class="print-forn-total">Total ${escapeHtml(f.nome)}: R$ ${f.preco ? escapeHtml(f.preco) : '0,00'}</div>
-        ${f.condicoes ? `<div class="print-sub">Condições: ${escapeHtml(f.condicoes)}</div>` : ''}
-      </div>
-    `;
   });
+
+  let blocosHtml = '';
+  grupos.forEach(g => {
+    const unitarios = g.ofertas.filter(o => o.unit !== null).map(o => o.unit);
+    const menorUnit = unitarios.length > 1 ? Math.min(...unitarios) : (unitarios.length === 1 ? unitarios[0] : null);
+    const linhas = g.ofertas.map(o => {
+      const isMenor = menorUnit !== null && o.unit === menorUnit && g.ofertas.length > 1;
+      return `<tr class="${isMenor ? 'print-menor-preco' : ''}">
+        <td>${escapeHtml(o.forn.nome)}${o.forn.fechado ? ' <span class="print-fechado">(Fechado)</span>' : ''}</td>
+        <td>${escapeHtml(o.quantidade || '—')}</td>
+        <td>${o.valorUnitario ? 'R$ ' + escapeHtml(o.valorUnitario) : '—'}${isMenor ? ' <span class="print-menor-tag">MENOR PREÇO</span>' : ''}</td>
+        <td>${o.unit !== null ? 'R$ ' + formatMoney(o.subtotal) : '—'}</td>
+      </tr>`;
+    }).join('');
+    blocosHtml += `
+      <div class="print-forn-block">
+        <h3>${escapeHtml(g.nome)}</h3>
+        <table>
+          <thead><tr><th>Fornecedor</th><th>Qtd</th><th>Valor unitário</th><th>Valor total</th></tr></thead>
+          <tbody>${linhas}</tbody>
+        </table>
+      </div>`;
+  });
+
+  // Resumo geral por fornecedor
+  const precos = fornecedores.map(f => parsePrice(f.preco)).filter(v => v !== null);
+  const menorTotal = precos.length > 1 ? Math.min(...precos) : null;
+  const resumoLinhas = fornecedores.map(f => {
+    const isMenor = menorTotal !== null && parsePrice(f.preco) === menorTotal;
+    return `<tr class="${isMenor ? 'print-menor-preco' : ''}">
+      <td>${escapeHtml(f.nome)}${f.fechado ? ' <span class="print-fechado">(Fechado)</span>' : ''}</td>
+      <td>${f.preco ? 'R$ ' + escapeHtml(f.preco) : '—'}${isMenor ? ' <span class="print-menor-tag">MENOR TOTAL</span>' : ''}</td>
+      <td>${escapeHtml(f.condicoes || '—')}</td>
+    </tr>`;
+  }).join('');
 
   const hoje = new Date().toLocaleDateString('pt-BR');
 
   document.getElementById('print-area').innerHTML = `
     <h1>Cotação — ${escapeHtml(c.produto)}</h1>
     <div class="print-sub">Status: ${statusLabel} · Prazo de resposta: ${c.prazo ? formatDate(c.prazo) : '—'} · Emitido em ${hoje}</div>
-    <table>
-      <thead>
-        <tr><th>Fornecedor</th><th>Qtd. itens</th><th>Valor total</th></tr>
-      </thead>
-      <tbody>${resumoLinhas || '<tr><td colspan="3">Nenhum fornecedor cadastrado</td></tr>'}</tbody>
-    </table>
-    ${detalhesHtml}
+    ${blocosHtml || '<p>Nenhum produto informado</p>'}
+    <div class="print-forn-block">
+      <h3>Resumo por fornecedor</h3>
+      <table>
+        <thead><tr><th>Fornecedor</th><th>Total geral</th><th>Condições</th></tr></thead>
+        <tbody>${resumoLinhas || '<tr><td colspan="3">Nenhum fornecedor cadastrado</td></tr>'}</tbody>
+      </table>
+    </div>
     <div class="print-signature">
       <div>Assinatura do solicitante</div>
       <div>Comprador responsável</div>
