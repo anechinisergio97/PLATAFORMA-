@@ -179,6 +179,8 @@
     padding:6px; border-radius:6px; cursor:pointer; font-size:11.5px; margin-bottom:8px;
   }
   .btn-copy-produtos:hover{color:var(--text); border-color:var(--accent-dim);}
+  .forn-edit-row .produto-extra{display:grid; grid-template-columns:1fr auto; gap:10px; align-items:center; margin-top:6px;}
+  .forn-edit-row .produto-extra input[type="text"]{margin-bottom:0;}
   .forn-edit-row .produtos-list{margin-bottom:6px;}
   .forn-edit-row .produto-row{
     background:var(--panel-3); border:1px solid var(--line); border-radius:6px; padding:8px; margin-bottom:6px;
@@ -775,20 +777,16 @@ function renderRelatorio(){
   const linhas = [];
 
   aprovadasNoPeriodo.forEach(c => {
-    const fechado = (c.fornecedores || []).find(f => f.fechado);
-    const fechadoP = fechado ? parsePrice(fechado.preco) : null;
+    const fc = fechamentoCotacao(c);
     const negP = c.precoNegociado ? parsePrice(c.precoNegociado) : null;
-    const valorGasto = (negP !== null) ? negP : (fechadoP !== null ? fechadoP : 0);
-    let economia = 0;
-    if(fechadoP !== null && negP !== null && negP < fechadoP){
-      economia = fechadoP - negP;
-    }
+    const valorGasto = (negP !== null) ? negP : (fc.ativo ? fc.valor : 0);
+    const economia = economiaCotacao(c);
     totalGasto += valorGasto;
     totalEconomia += economia;
     linhas.push({
       produto: c.produto,
       data: c.dataAprovacaoISO,
-      fornecedor: fechado ? fechado.nome : '—',
+      fornecedor: fc.nomes.length ? fc.nomes.join(', ') : '—',
       valorGasto,
       economia
     });
@@ -1006,14 +1004,14 @@ function render(){
       const fornecedores = c.fornecedores || [];
       const precos = fornecedores.map(f => parsePrice(f.preco)).filter(v => v !== null);
       const menorPreco = precos.length ? Math.min(...precos) : null;
-      const fechado = fornecedores.find(f => f.fechado);
+      const fechado = fechamentoCotacao(c).ativo;
 
       let fornHtml = '';
       fornecedores.forEach(f => {
         const p = parsePrice(f.preco);
         const isMenor = menorPreco !== null && p === menorPreco;
         fornHtml += `<div class="forn-row ${f.fechado ? 'fechado' : ''} ${isMenor ? 'menor' : ''}">
-          <span class="forn-nome">${escapeHtml(f.nome)}${f.fechado ? '<span class="forn-tag">Fechado</span>' : ''}</span>
+          <span class="forn-nome">${escapeHtml(f.nome)}${f.fechado ? '<span class="forn-tag">Fechado</span>' : ((f.produtos || []).filter(p => p.fechado).length ? `<span class="forn-tag">${(f.produtos || []).filter(p => p.fechado).length} fechado(s)</span>` : '')}</span>
           <span class="forn-preco">${f.preco ? 'R$ ' + escapeHtml(f.preco) : '—'}</span>
         </div>`;
         if(f.condicoes){
@@ -1022,12 +1020,9 @@ function render(){
       });
 
       let savingHtml = '';
-      if(fechado && c.precoNegociado){
-        const fechadoP = parsePrice(fechado.preco);
-        const negP = parsePrice(c.precoNegociado);
-        if(fechadoP !== null && negP !== null && negP < fechadoP){
-          savingHtml = `<div class="saving-badge">Economia de R$ ${formatMoney(fechadoP - negP)}</div>`;
-        }
+      const economiaC = economiaCotacao(c);
+      if(economiaC > 0){
+        savingHtml = `<div class="saving-badge">Economia de R$ ${formatMoney(economiaC)}</div>`;
       }
 
       const late = c.status !== 'aprovada' && c.status !== 'perdida' && isLate(c.prazo);
@@ -1106,16 +1101,7 @@ function renderMeta(){
 
 function getEconomiaPainel(){
   let economiaPainel = 0;
-  cotacoes.forEach(c => {
-    const fechado = (c.fornecedores || []).find(f => f.fechado);
-    if(fechado && c.precoNegociado){
-      const fechadoP = parsePrice(fechado.preco);
-      const negP = parsePrice(c.precoNegociado);
-      if(fechadoP !== null && negP !== null && negP < fechadoP){
-        economiaPainel += (fechadoP - negP);
-      }
-    }
-  });
+  cotacoes.forEach(c => { economiaPainel += economiaCotacao(c); });
   return economiaPainel;
 }
 
@@ -1184,10 +1170,54 @@ document.querySelectorAll('.col').forEach(col => {
 const overlay = document.getElementById('modal-overlay');
 const fornListEl = document.getElementById('forn-list');
 
-function produtoSubtotal(p){
+function produtoBruto(p){
   const qtd = parseFloat((p.quantidade || '').toString().replace(',', '.')) || 0;
   const vUnit = parsePrice(p.valorUnitario) || 0;
   return qtd * vUnit;
+}
+
+function produtoDesconto(p){
+  const d = parsePrice(p.desconto);
+  return d !== null && d > 0 ? d : 0;
+}
+
+function produtoSubtotal(p){
+  return Math.max(0, produtoBruto(p) - produtoDesconto(p));
+}
+
+// Itens fechados da cotação: por produto (se algum estiver marcado) ou pelo fornecedor fechado
+function fechamentoCotacao(c){
+  const forns = c.fornecedores || [];
+  const temProdFechado = forns.some(f => (f.produtos || []).some(p => p.fechado));
+  let itens = [];
+  let valor = 0;
+  let ativo = false;
+  if(temProdFechado){
+    ativo = true;
+    forns.forEach(f => (f.produtos || []).forEach(p => { if(p.fechado) itens.push({forn: f, prod: p}); }));
+    valor = itens.reduce((sum, it) => sum + produtoSubtotal(it.prod), 0);
+  } else {
+    const f = forns.find(x => x.fechado);
+    if(f){
+      ativo = true;
+      itens = getProdutosForPrint(f).map(prod => ({forn: f, prod}));
+      const pf = parsePrice(f.preco);
+      valor = pf !== null ? pf : itens.reduce((sum, it) => sum + produtoSubtotal(it.prod), 0);
+    }
+  }
+  const desconto = itens.reduce((sum, it) => sum + produtoDesconto(it.prod), 0);
+  const nomes = [...new Set(itens.map(it => it.forn.nome))];
+  if(ativo && !nomes.length){ const f = forns.find(x => x.fechado); if(f) nomes.push(f.nome); }
+  return { ativo, itens, valor, desconto, nomes, porProduto: temProdFechado };
+}
+
+function economiaCotacao(c){
+  const fc = fechamentoCotacao(c);
+  if(!fc.ativo) return 0;
+  let e = fc.desconto;
+  const negP = c.precoNegociado ? parsePrice(c.precoNegociado) : null;
+  if(negP !== null && negP < fc.valor) e += (fc.valor - negP);
+  return e;
 }
 
 function recalcFornTotal(row){
@@ -1217,6 +1247,13 @@ function renderFornRows(){
             <input type="text" placeholder="Valor unitário R$" class="produto-vunit-input" value="${escapeHtml(p.valorUnitario || '')}">
             <div class="produto-subtotal">R$ ${formatMoney(sub)}</div>
             <button type="button" class="remove-produto" title="Remover produto">×</button>
+          </div>
+          <div class="produto-extra">
+            <input type="text" placeholder="Desconto R$ (opcional)" class="produto-desc-valor-input" value="${escapeHtml(p.desconto || '')}">
+            <label class="fechado-toggle">
+              <input type="checkbox" class="produto-fechado-input" ${p.fechado ? 'checked' : ''}>
+              Produto fechado
+            </label>
           </div>
         </div>
       `;
@@ -1260,6 +1297,25 @@ function renderFornRows(){
       inp.addEventListener('input', (e) => {
         row.produtos[pIdx].valorUnitario = e.target.value;
         atualizarTotais(pIdx);
+      });
+    });
+    div.querySelectorAll('.produto-desc-valor-input').forEach((inp, pIdx) => {
+      inp.addEventListener('input', (e) => {
+        row.produtos[pIdx].desconto = e.target.value;
+        atualizarTotais(pIdx);
+      });
+    });
+    div.querySelectorAll('.produto-fechado-input').forEach((chk, pIdx) => {
+      chk.addEventListener('change', (e) => {
+        const alvo = row.produtos[pIdx];
+        alvo.fechado = e.target.checked;
+        const nomeP = (alvo.descricao || '').trim().toLowerCase();
+        if(e.target.checked && nomeP){
+          fornRows.forEach(r => (r.produtos || []).forEach(q => {
+            if(q !== alvo && (q.descricao || '').trim().toLowerCase() === nomeP) q.fechado = false;
+          }));
+        }
+        renderFornRows();
       });
     });
     div.querySelectorAll('.remove-produto').forEach((btn, pIdx) => {
@@ -1345,9 +1401,12 @@ function imprimirCotacao(id){
       const qtd = parseFloat((prod.quantidade || '').toString().replace(',', '.')) || 0;
       const vUnit = parsePrice(prod.valorUnitario);
       const cotou = (prod.valorUnitario || '').toString().trim() !== '' && vUnit !== null;
+      const desc = produtoDesconto(prod);
+      const sub = produtoSubtotal(prod);
       mapa[chave].ofertas.push({
         forn: f, quantidade: prod.quantidade || '', valorUnitario: prod.valorUnitario || '',
-        subtotal: qtd * (vUnit || 0), unit: cotou ? vUnit : null
+        desconto: desc, fechado: !!prod.fechado,
+        subtotal: sub, unit: cotou ? (qtd > 0 ? sub / qtd : vUnit) : null
       });
     });
   });
@@ -1356,12 +1415,14 @@ function imprimirCotacao(id){
   grupos.forEach(g => {
     const unitarios = g.ofertas.filter(o => o.unit !== null).map(o => o.unit);
     const menorUnit = unitarios.length > 1 ? Math.min(...unitarios) : (unitarios.length === 1 ? unitarios[0] : null);
+    const temDesc = g.ofertas.some(o => o.desconto > 0);
     const linhas = g.ofertas.map(o => {
       const isMenor = menorUnit !== null && o.unit === menorUnit && g.ofertas.length > 1;
       return `<tr class="${isMenor ? 'print-menor-preco' : ''}">
-        <td>${escapeHtml(o.forn.nome)}${o.forn.fechado ? ' <span class="print-fechado">(Fechado)</span>' : ''}</td>
+        <td>${escapeHtml(o.forn.nome)}${(o.fechado || o.forn.fechado) ? ' <span class="print-fechado">(Fechado)</span>' : ''}</td>
         <td>${escapeHtml(o.quantidade || '—')}</td>
         <td>${o.valorUnitario ? 'R$ ' + escapeHtml(o.valorUnitario) : '—'}${isMenor ? ' <span class="print-menor-tag">MENOR PREÇO</span>' : ''}</td>
+        ${temDesc ? `<td>${o.desconto > 0 ? '- R$ ' + formatMoney(o.desconto) : '—'}</td>` : ''}
         <td>${o.unit !== null ? 'R$ ' + formatMoney(o.subtotal) : '—'}</td>
       </tr>`;
     }).join('');
@@ -1369,7 +1430,7 @@ function imprimirCotacao(id){
       <div class="print-forn-block">
         <h3>${escapeHtml(g.nome)}</h3>
         <table>
-          <thead><tr><th>Fornecedor</th><th>Qtd</th><th>Valor unitário</th><th>Valor total</th></tr></thead>
+          <thead><tr><th>Fornecedor</th><th>Qtd</th><th>Valor unitário</th>${temDesc ? '<th>Desconto</th>' : ''}<th>Valor total</th></tr></thead>
           <tbody>${linhas}</tbody>
         </table>
       </div>`;
@@ -1415,41 +1476,46 @@ function imprimirCotacao(id){
 function gerarPedidoCompra(id){
   const c = cotacoes.find(x => x.id === id);
   if(!c) return;
-  const fechado = (c.fornecedores || []).find(f => f.fechado);
-  if(!fechado){
-    alert('Marque um fornecedor como "Fechado" nessa cotação antes de gerar o pedido de compra.');
+  const fc = fechamentoCotacao(c);
+  if(!fc.ativo){
+    alert('Marque um fornecedor ou produtos como "Fechado" nessa cotação antes de gerar o pedido de compra.');
     return;
   }
 
   const hoje = new Date().toLocaleDateString('pt-BR');
   const numeroPedido = 'PC-' + c.id.replace(/[^0-9]/g, '').slice(-8);
 
-  const produtos = getProdutosForPrint(fechado);
-  let linhasProd = '';
-  produtos.forEach(prod => {
-    const qtd = parseFloat((prod.quantidade || '').toString().replace(',', '.')) || 0;
-    const vUnit = parsePrice(prod.valorUnitario) || 0;
-    const subtotal = qtd * vUnit;
-    linhasProd += `<tr>
-      <td>${escapeHtml(fechado.nome)}</td>
+  const temDesc = fc.itens.some(it => produtoDesconto(it.prod) > 0);
+  const linhasProd = fc.itens.map(it => {
+    const prod = it.prod;
+    const desc = produtoDesconto(prod);
+    return `<tr>
+      <td>${escapeHtml(it.forn.nome)}</td>
       <td>${escapeHtml(prod.descricao || c.produto)}</td>
       <td>${escapeHtml(prod.quantidade || '—')}</td>
       <td>${prod.valorUnitario ? 'R$ ' + escapeHtml(prod.valorUnitario) : '—'}</td>
-      <td>R$ ${formatMoney(subtotal)}</td>
+      ${temDesc ? `<td>${desc > 0 ? '- R$ ' + formatMoney(desc) : '—'}</td>` : ''}
+      <td>R$ ${formatMoney(produtoSubtotal(prod))}</td>
     </tr>`;
-  });
+  }).join('');
+
+  const condicoesHtml = fc.nomes.map(n => {
+    const f = (c.fornecedores || []).find(x => x.nome === n);
+    const label = fc.nomes.length > 1 ? `<strong>${escapeHtml(n)}:</strong> ` : '<strong>Condições:</strong> ';
+    return `<div class="print-sub" style="margin-top:12px;">${label}${escapeHtml((f && f.condicoes) || 'Não informadas')}</div>`;
+  }).join('');
 
   document.getElementById('print-area').innerHTML = `
     <h1>Pedido de Compra — ${numeroPedido}</h1>
     <div class="print-sub">Emitido em ${hoje}</div>
     <table>
       <thead>
-        <tr><th>Fornecedor</th><th>Produto</th><th>Qtd</th><th>Valor unitário</th><th>Valor total</th></tr>
+        <tr><th>Fornecedor</th><th>Produto</th><th>Qtd</th><th>Valor unitário</th>${temDesc ? '<th>Desconto</th>' : ''}<th>Valor total</th></tr>
       </thead>
-      <tbody>${linhasProd || '<tr><td colspan="5">Nenhum produto informado</td></tr>'}</tbody>
+      <tbody>${linhasProd || '<tr><td colspan="6">Nenhum produto informado</td></tr>'}</tbody>
     </table>
-    <div class="print-forn-total" style="text-align:right; margin-top:6px;">Total do pedido: R$ ${fechado.preco ? escapeHtml(fechado.preco) : '0,00'}</div>
-    <div class="print-sub" style="margin-top:16px;"><strong>Condições:</strong> ${escapeHtml(fechado.condicoes || 'Não informadas')}</div>
+    <div class="print-forn-total" style="text-align:right; margin-top:6px;">Total do pedido: R$ ${formatMoney(fc.valor)}</div>
+    ${condicoesHtml}
     <div class="print-signature">
       <div>Assinatura do solicitante</div>
       <div>Comprador responsável</div>
@@ -1512,12 +1578,14 @@ document.getElementById('btn-save').addEventListener('click', () => {
     .filter(f => f.nome && f.nome.trim())
     .map(f => {
       const produtos = (f.produtos || [])
-        .filter(p => (p.descricao && p.descricao.trim()) || (p.quantidade && p.quantidade.toString().trim()) || (p.valorUnitario && p.valorUnitario.toString().trim()))
+        .filter(p => (p.descricao && p.descricao.trim()) || (p.quantidade && p.quantidade.toString().trim()) || (p.valorUnitario && p.valorUnitario.toString().trim()) || (p.desconto && p.desconto.toString().trim()))
         .map(p => ({
           id: p.id || uid('p'),
           descricao: (p.descricao || '').trim(),
           quantidade: (p.quantidade || '').toString().trim(),
-          valorUnitario: (p.valorUnitario || '').toString().trim()
+          valorUnitario: (p.valorUnitario || '').toString().trim(),
+          desconto: (p.desconto || '').toString().trim(),
+          fechado: !!p.fechado
         }));
       const totalCalculado = produtos.reduce((sum, p) => sum + produtoSubtotal(p), 0);
       return {
