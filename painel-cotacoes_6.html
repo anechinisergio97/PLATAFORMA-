@@ -372,6 +372,7 @@
   body.readonly-mode #btn-new,
   body.readonly-mode #btn-import,
   body.readonly-mode #btn-reset,
+  body.readonly-mode #btn-arquivar,
   body.readonly-mode .card .edit,
   body.readonly-mode .card .del,
   body.readonly-mode .forn-add-row,
@@ -389,6 +390,7 @@
   }
   body.readonly-mode .readonly-badge{display:inline-block;}
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 <div class="login-overlay" id="login-overlay">
@@ -449,6 +451,8 @@
       </div>
       <input type="month" id="rel-mes">
       <input type="number" id="rel-ano" min="2020" max="2100" style="width:90px;">
+      <button class="ghost" id="rel-btn-pdf">⬇ PDF</button>
+      <button class="ghost" id="rel-btn-excel">⬇ Excel</button>
     </div>
   </div>
 
@@ -526,6 +530,7 @@
     <button class="ghost" id="btn-export">⬇ Exportar dados</button>
     <button class="ghost" id="btn-import">⬆ Importar dados</button>
     <input type="file" id="input-import" accept="application/json" style="display:none;">
+    <button class="ghost" id="btn-arquivar">📦 Arquivar ano</button>
     <button class="ghost" id="btn-reset">Limpar tudo</button>
   </div>
 
@@ -763,24 +768,11 @@ document.getElementById('rel-mes').addEventListener('change', renderRelatorio);
 document.getElementById('rel-ano').addEventListener('change', renderRelatorio);
 document.getElementById('rel-ano').style.display = 'none';
 
-function renderRelatorio(){
-  const mesFiltro = document.getElementById('rel-mes').value; // "YYYY-MM"
-  const anoFiltro = document.getElementById('rel-ano').value; // "YYYY"
-
-  const aprovadasNoPeriodo = cotacoes.filter(c => {
-    if(c.status !== 'aprovada' || !c.dataAprovacaoISO) return false;
-    if(relModo === 'mensal'){
-      return mesFiltro && c.dataAprovacaoISO.startsWith(mesFiltro);
-    } else {
-      return anoFiltro && c.dataAprovacaoISO.startsWith(String(anoFiltro));
-    }
-  });
-
+function calcLinhasRelatorio(lista){
   let totalGasto = 0;
   let totalEconomia = 0;
   const linhas = [];
-
-  aprovadasNoPeriodo.forEach(c => {
+  lista.forEach(c => {
     const fc = fechamentoCotacao(c);
     const negP = c.precoNegociado ? parsePrice(c.precoNegociado) : null;
     const valorGasto = (negP !== null) ? negP : (fc.ativo ? fc.valor : 0);
@@ -795,8 +787,36 @@ function renderRelatorio(){
       economia
     });
   });
+  linhas.sort((a,b) => ((a.data || '') > (b.data || '') ? -1 : 1));
+  return { linhas, totalGasto, totalEconomia };
+}
 
-  linhas.sort((a,b) => (a.data > b.data ? -1 : 1));
+function aprovadasDoPeriodo(){
+  const mesFiltro = document.getElementById('rel-mes').value; // "YYYY-MM"
+  const anoFiltro = document.getElementById('rel-ano').value; // "YYYY"
+  return cotacoes.filter(c => {
+    if(c.status !== 'aprovada' || !c.dataAprovacaoISO) return false;
+    if(relModo === 'mensal'){
+      return mesFiltro && c.dataAprovacaoISO.startsWith(mesFiltro);
+    } else {
+      return anoFiltro && c.dataAprovacaoISO.startsWith(String(anoFiltro));
+    }
+  });
+}
+
+function rotuloPeriodo(){
+  if(relModo === 'mensal'){
+    const v = document.getElementById('rel-mes').value;
+    if(!v) return '';
+    const [ano, mes] = v.split('-');
+    return mes + '/' + ano;
+  }
+  return document.getElementById('rel-ano').value;
+}
+
+function renderRelatorio(){
+  const aprovadasNoPeriodo = aprovadasDoPeriodo();
+  const { linhas, totalGasto, totalEconomia } = calcLinhasRelatorio(aprovadasNoPeriodo);
 
   document.getElementById('rel-qtd').textContent = aprovadasNoPeriodo.length;
   document.getElementById('rel-gasto').textContent = 'R$ ' + formatMoney(totalGasto);
@@ -1671,6 +1691,132 @@ document.getElementById('input-import').addEventListener('change', (e) => {
   };
   reader.readAsText(file);
   e.target.value = '';
+});
+
+function baixarBlob(blob, nome){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = nome;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function exportarExcel(nomeArquivo, abas){
+  if(window.XLSX){
+    const wb = XLSX.utils.book_new();
+    abas.forEach(ab => {
+      const ws = XLSX.utils.aoa_to_sheet(ab.linhas);
+      ws['!cols'] = ab.linhas[0].map(() => ({wch: 24}));
+      XLSX.utils.book_append_sheet(wb, ws, ab.nome);
+    });
+    XLSX.writeFile(wb, nomeArquivo + '.xlsx');
+  } else {
+    // alternativa: CSV (abre no Excel) caso a biblioteca não tenha carregado
+    const csv = abas[0].linhas.map(l => l.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(';')).join('\r\n');
+    baixarBlob(new Blob(['\ufeff' + csv], {type:'text/csv;charset=utf-8'}), nomeArquivo + '.csv');
+  }
+}
+
+function linhasExcelRelatorio(linhas, totalGasto, totalEconomia){
+  const out = [['Produto', 'Data de aprovação', 'Fornecedor(es) fechado(s)', 'Valor gasto (R$)', 'Economia (R$)']];
+  linhas.forEach(l => out.push([l.produto, l.data ? formatDate(l.data) : '', l.fornecedor, Number(l.valorGasto.toFixed(2)), Number(l.economia.toFixed(2))]));
+  out.push(['TOTAL', '', '', Number(totalGasto.toFixed(2)), Number(totalEconomia.toFixed(2))]);
+  return out;
+}
+
+document.getElementById('rel-btn-excel').addEventListener('click', () => {
+  const { linhas, totalGasto, totalEconomia } = calcLinhasRelatorio(aprovadasDoPeriodo());
+  if(!linhas.length){ alert('Nenhuma cotação aprovada nesse período para exportar.'); return; }
+  const per = rotuloPeriodo().replace('/', '-');
+  exportarExcel('relatorio-economias-' + per, [{ nome: 'Relatório', linhas: linhasExcelRelatorio(linhas, totalGasto, totalEconomia) }]);
+});
+
+document.getElementById('rel-btn-pdf').addEventListener('click', () => {
+  const lista = aprovadasDoPeriodo();
+  const { linhas, totalGasto, totalEconomia } = calcLinhasRelatorio(lista);
+  if(!linhas.length){ alert('Nenhuma cotação aprovada nesse período para exportar.'); return; }
+  const hoje = new Date().toLocaleDateString('pt-BR');
+  const trs = linhas.map(l => `<tr>
+    <td>${escapeHtml(l.produto)}</td>
+    <td>${l.data ? formatDate(l.data) : '—'}</td>
+    <td>${escapeHtml(l.fornecedor)}</td>
+    <td>R$ ${formatMoney(l.valorGasto)}</td>
+    <td>${l.economia > 0 ? 'R$ ' + formatMoney(l.economia) : '—'}</td>
+  </tr>`).join('');
+  document.getElementById('print-area').innerHTML = `
+    <h1>Relatório de Economias — ${relModo === 'mensal' ? 'mês ' : 'ano '}${escapeHtml(rotuloPeriodo())}</h1>
+    <div class="print-sub">Emitido em ${hoje}</div>
+    <table>
+      <thead><tr><th>Cotações aprovadas</th><th>Valor gasto (fechado)</th><th>Economia gerada</th></tr></thead>
+      <tbody><tr><td>${linhas.length}</td><td>R$ ${formatMoney(totalGasto)}</td><td>R$ ${formatMoney(totalEconomia)}</td></tr></tbody>
+    </table>
+    <table>
+      <thead><tr><th>Produto</th><th>Data</th><th>Fornecedor fechado</th><th>Valor gasto</th><th>Economia</th></tr></thead>
+      <tbody>${trs}</tbody>
+    </table>
+    <div class="print-footer">Documento gerado pelo Painel de Cotações.</div>
+  `;
+  window.print();
+});
+
+document.getElementById('btn-arquivar').addEventListener('click', async () => {
+  if(!isAdmin) return;
+  const fechadas = cotacoes.filter(c => c.status === 'aprovada' || c.status === 'perdida');
+  const abertas = cotacoes.filter(c => !(c.status === 'aprovada' || c.status === 'perdida'));
+  if(!fechadas.length){ alert('Não há cotações aprovadas ou perdidas para arquivar.'); return; }
+
+  const ano = prompt('Qual ano você está arquivando?', String(new Date().getFullYear()));
+  if(ano === null) return;
+  const anoTxt = ano.trim();
+  if(!/^\d{4}$/.test(anoTxt)){ alert('Ano inválido. Digite 4 dígitos, por exemplo 2026.'); return; }
+
+  const msg = 'Arquivar o ano ' + anoTxt + '?\n\n' +
+    '• ' + fechadas.length + ' cotação(ões) aprovada(s)/perdida(s) serão salvas no arquivo e removidas do painel.\n' +
+    '• ' + abertas.length + ' cotação(ões) em andamento continuam no painel.\n' +
+    '• A "Economia anterior (Excel)" será zerada para o novo ano (o valor fica guardado no arquivo).\n' +
+    '• Um Excel com tudo será baixado agora como segurança.\n\n' +
+    'Isso vale para todo mundo que usa este painel. Continuar?';
+  if(!confirm(msg)) return;
+
+  // 1) Excel de segurança
+  const aprovadas = fechadas.filter(c => c.status === 'aprovada');
+  const r = calcLinhasRelatorio(aprovadas);
+  const itens = [['Cotação', 'Data de aprovação', 'Fornecedor', 'Produto', 'Qtd', 'Valor unitário', 'Desconto (R$)', 'Valor total (R$)']];
+  aprovadas.forEach(c => {
+    fechamentoCotacao(c).itens.forEach(it => {
+      itens.push([c.produto, c.dataAprovacaoISO ? formatDate(c.dataAprovacaoISO) : '', it.forn.nome,
+        it.prod.descricao || c.produto, it.prod.quantidade || '', it.prod.valorUnitario || '',
+        Number(produtoDesconto(it.prod).toFixed(2)), Number(produtoSubtotal(it.prod).toFixed(2))]);
+    });
+  });
+  const abas = [{ nome: 'Aprovadas', linhas: linhasExcelRelatorio(r.linhas, r.totalGasto, r.totalEconomia) }];
+  if(itens.length > 1) abas.push({ nome: 'Itens fechados', linhas: itens });
+  exportarExcel('arquivo-cotacoes-' + anoTxt, abas);
+
+  // 2) Guarda o arquivo na nuvem (documento separado, não mexe no painel atual)
+  try{
+    await setDoc(doc(db, 'painel', 'arquivo-' + anoTxt + '-' + Date.now()), {
+      ano: anoTxt,
+      arquivadoEm: new Date().toISOString(),
+      cotacoes: fechadas,
+      economiaExcel: economiaExcel || 0,
+      metaPessoal: metaPessoal || 0
+    });
+  }catch(e){
+    console.error(e);
+    alert('Não consegui salvar o arquivo na nuvem, então NADA foi apagado do painel. O Excel de segurança já foi baixado. Tente de novo mais tarde.');
+    return;
+  }
+
+  // 3) Limpa o painel para o novo ano
+  cotacoes = abertas;
+  economiaExcel = 0;
+  await saveData();
+  render();
+  alert('Ano ' + anoTxt + ' arquivado! O painel está pronto para o novo ano.');
 });
 
 document.getElementById('btn-reset').addEventListener('click', () => {
