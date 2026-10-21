@@ -1509,48 +1509,58 @@ function gerarPedidoCompra(id){
   }
 
   const hoje = new Date().toLocaleDateString('pt-BR');
-  const numeroPedido = 'PC-' + c.id.replace(/[^0-9]/g, '').slice(-8);
+  const baseNumero = 'PC-' + c.id.replace(/[^0-9]/g, '').slice(-8);
+  const nomes = fc.nomes.length ? fc.nomes : [...new Set(fc.itens.map(it => it.forn.nome))];
 
-  const temDesc = fc.itens.some(it => produtoDesconto(it.prod) > 0);
-  const linhasProd = fc.itens.map(it => {
-    const prod = it.prod;
-    const desc = produtoDesconto(prod);
-    return `<tr>
-      <td>${escapeHtml(it.forn.nome)}</td>
-      <td>${escapeHtml(prod.descricao || c.produto)}</td>
-      <td>${escapeHtml(prod.quantidade || '—')}</td>
-      <td>${prod.valorUnitario ? 'R$ ' + escapeHtml(prod.valorUnitario) : '—'}</td>
-      ${temDesc ? `<td>${desc > 0 ? '- R$ ' + formatMoney(desc) : '—'}</td>` : ''}
-      <td>R$ ${formatMoney(produtoSubtotal(prod))}</td>
-    </tr>`;
+  const paginas = nomes.map((nome, i) => {
+    const itens = fc.itens.filter(it => it.forn.nome === nome);
+    const forn = (c.fornecedores || []).find(x => x.nome === nome) || (itens[0] && itens[0].forn) || {};
+    const temDesc = itens.some(it => produtoDesconto(it.prod) > 0);
+    let total = 0;
+    const linhas = itens.map(it => {
+      const prod = it.prod;
+      const desc = produtoDesconto(prod);
+      const sub = produtoSubtotal(prod);
+      total += sub;
+      return `<tr>
+        <td>${escapeHtml(prod.descricao || c.produto)}</td>
+        <td>${escapeHtml(prod.quantidade || '—')}</td>
+        <td>${prod.valorUnitario ? 'R$ ' + escapeHtml(prod.valorUnitario) : '—'}</td>
+        ${temDesc ? `<td>${desc > 0 ? '- R$ ' + formatMoney(desc) : '—'}</td>` : ''}
+        <td>R$ ${formatMoney(sub)}</td>
+      </tr>`;
+    }).join('');
+    // fornecedor fechado inteiro (formato antigo): usa o total salvo
+    if(!fc.porProduto){
+      const pf = parsePrice(forn.preco);
+      if(pf !== null) total = pf;
+    }
+    const numero = nomes.length > 1 ? baseNumero + '-' + (i + 1) : baseNumero;
+    const ultima = i === nomes.length - 1;
+    return `
+      <div class="print-page ${ultima ? 'print-page-last' : ''}">
+        <h1>Pedido de Compra — ${numero}</h1>
+        <div class="print-sub">Emitido em ${hoje} · Cotação: ${escapeHtml(c.produto)}</div>
+        <div class="print-sub" style="margin-bottom:6px; font-size:14px; color:#111;"><strong>Fornecedor:</strong> ${escapeHtml(nome)}</div>
+        <table>
+          <thead>
+            <tr><th>Produto</th><th>Qtd</th><th>Valor unitário</th>${temDesc ? '<th>Desconto</th>' : ''}<th>Valor total</th></tr>
+          </thead>
+          <tbody>${linhas || '<tr><td colspan="5">Nenhum produto informado</td></tr>'}</tbody>
+        </table>
+        <div class="print-forn-total" style="text-align:right; margin-top:6px;">Total do pedido: R$ ${formatMoney(total)}</div>
+        <div class="print-sub" style="margin-top:16px;"><strong>Condições:</strong> ${escapeHtml(forn.condicoes || 'Não informadas')}</div>
+        <div class="print-signature">
+          <div>Assinatura do solicitante</div>
+          <div>Comprador responsável</div>
+          <div>Liberado por</div>
+        </div>
+        <div class="print-date">Data: ____ / ____ / ______</div>
+        <div class="print-footer">Documento gerado pelo Painel de Cotações.</div>
+      </div>`;
   }).join('');
 
-  const condicoesHtml = fc.nomes.map(n => {
-    const f = (c.fornecedores || []).find(x => x.nome === n);
-    const label = fc.nomes.length > 1 ? `<strong>${escapeHtml(n)}:</strong> ` : '<strong>Condições:</strong> ';
-    return `<div class="print-sub" style="margin-top:12px;">${label}${escapeHtml((f && f.condicoes) || 'Não informadas')}</div>`;
-  }).join('');
-
-  document.getElementById('print-area').innerHTML = `
-    <h1>Pedido de Compra — ${numeroPedido}</h1>
-    <div class="print-sub">Emitido em ${hoje}</div>
-    <table>
-      <thead>
-        <tr><th>Fornecedor</th><th>Produto</th><th>Qtd</th><th>Valor unitário</th>${temDesc ? '<th>Desconto</th>' : ''}<th>Valor total</th></tr>
-      </thead>
-      <tbody>${linhasProd || '<tr><td colspan="6">Nenhum produto informado</td></tr>'}</tbody>
-    </table>
-    <div class="print-forn-total" style="text-align:right; margin-top:6px;">Total do pedido: R$ ${formatMoney(fc.valor)}</div>
-    ${condicoesHtml}
-    <div class="print-signature">
-      <div>Assinatura do solicitante</div>
-      <div>Comprador responsável</div>
-      <div>Liberado por</div>
-    </div>
-    <div class="print-date">Data: ____ / ____ / ______</div>
-    <div class="print-footer">Documento gerado pelo Painel de Cotações.</div>
-  `;
-
+  document.getElementById('print-area').innerHTML = paginas;
   window.print();
 }
 
