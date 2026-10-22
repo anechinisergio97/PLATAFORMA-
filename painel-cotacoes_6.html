@@ -1055,6 +1055,7 @@ function render(){
         <div class="actions">
           <button class="print-btn" data-id="${c.id}" title="Imprimir / Salvar PDF">🖨️</button>
           ${fechado ? `<button class="pedido-btn" data-id="${c.id}" title="Gerar pedido de compra">🧾</button>` : ''}
+          ${fechado ? `<button class="estoque-btn" data-id="${c.id}" title="Lista de entregas para o estoque (sem preços)">📦</button>` : ''}
           <button class="edit" data-id="${c.id}" title="Editar">✎</button>
           <button class="del" data-id="${c.id}" title="Excluir">×</button>
         </div>
@@ -1101,6 +1102,13 @@ function render(){
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       gerarPedidoCompra(btn.dataset.id);
+    });
+  });
+
+  document.querySelectorAll('.estoque-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      gerarListaEstoque(btn.dataset.id);
     });
   });
 
@@ -1496,6 +1504,36 @@ function imprimirCotacao(id){
     </div>
   `;
 
+  window.print();
+}
+
+function gerarListaEstoque(id){
+  const c = cotacoes.find(x => x.id === id);
+  if(!c) return;
+  const fc = fechamentoCotacao(c);
+  if(!fc.ativo || !fc.itens.length){
+    alert('Marque um fornecedor ou produtos como "Fechado" nessa cotação antes de gerar a lista para o estoque.');
+    return;
+  }
+  const hoje = new Date().toLocaleDateString('pt-BR');
+  const itens = fc.itens.slice().sort((a, b) => a.forn.nome.localeCompare(b.forn.nome));
+  const linhas = itens.map(it => `<tr>
+    <td>${escapeHtml(it.prod.descricao || c.produto)}</td>
+    <td>${escapeHtml(it.prod.quantidade || '—')}</td>
+    <td>${escapeHtml(it.forn.nome)}</td>
+    <td style="width:70px; text-align:center;">☐</td>
+  </tr>`).join('');
+
+  document.getElementById('print-area').innerHTML = `
+    <h1>Entregas previstas — ${escapeHtml(c.produto)}</h1>
+    <div class="print-sub">Lista para o estoque · Emitido em ${hoje}</div>
+    <table>
+      <thead><tr><th>Produto</th><th>Quantidade</th><th>Fornecedor</th><th>Recebido</th></tr></thead>
+      <tbody>${linhas}</tbody>
+    </table>
+    <div class="print-date" style="margin-top:30px;">Recebido por: ______________________ &nbsp;&nbsp; Data: ____ / ____ / ______</div>
+    <div class="print-footer">Documento gerado pelo Painel de Cotações.</div>
+  `;
   window.print();
 }
 
