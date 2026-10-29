@@ -1054,6 +1054,7 @@ function render(){
       card.innerHTML = `
         <div class="actions">
           <button class="print-btn" data-id="${c.id}" title="Imprimir / Salvar PDF">🖨️</button>
+          <button class="rfq-btn" data-id="${c.id}" title="Requisição de cotação para enviar aos fornecedores (sem preços)">📨</button>
           ${fechado ? `<button class="pedido-btn" data-id="${c.id}" title="Gerar pedido de compra">🧾</button>` : ''}
           ${fechado ? `<button class="estoque-btn" data-id="${c.id}" title="Lista de entregas para o estoque (sem preços)">📦</button>` : ''}
           <button class="edit" data-id="${c.id}" title="Editar">✎</button>
@@ -1105,6 +1106,12 @@ function render(){
     });
   });
 
+  document.querySelectorAll('.rfq-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      gerarRequisicaoCotacao(btn.dataset.id);
+    });
+  });
   document.querySelectorAll('.estoque-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -1504,6 +1511,60 @@ function imprimirCotacao(id){
     </div>
   `;
 
+  window.print();
+}
+
+function gerarRequisicaoCotacao(id){
+  const c = cotacoes.find(x => x.id === id);
+  if(!c) return;
+  const fornecedores = c.fornecedores || [];
+
+  // Lista total de produtos (união entre todos os fornecedores), sem preços
+  const lista = [];
+  const mapa = {};
+  fornecedores.forEach(f => getProdutosForPrint(f).forEach(prod => {
+    const nome = (prod.descricao || '').trim() || c.produto;
+    const chave = nome.toLowerCase().replace(/\s+/g, ' ');
+    if(!mapa[chave]){ mapa[chave] = { nome, quantidade: '' }; lista.push(mapa[chave]); }
+    if(!mapa[chave].quantidade && (prod.quantidade || '').toString().trim()) mapa[chave].quantidade = prod.quantidade;
+  }));
+  if(!lista.length) lista.push({ nome: c.produto, quantidade: '' });
+
+  const destinatarios = fornecedores.length ? fornecedores.map(f => f.nome) : [''];
+  const hoje = new Date().toLocaleDateString('pt-BR');
+  const numero = 'RC-' + c.id.replace(/[^0-9]/g, '').slice(-8);
+
+  const linhas = lista.map((it, i) => `<tr>
+    <td style="width:30px;">${i + 1}</td>
+    <td>${escapeHtml(it.nome)}</td>
+    <td style="width:70px;">${escapeHtml(it.quantidade || '')}</td>
+    <td style="width:110px;"></td>
+    <td style="width:110px;"></td>
+  </tr>`).join('');
+
+  document.getElementById('print-area').innerHTML = destinatarios.map((nome, i) => `
+    <div class="print-page ${i === destinatarios.length - 1 ? 'print-page-last' : ''}">
+      <h1>Solicitação de Cotação — ${numero}</h1>
+      <div class="print-sub">Emitida em ${hoje}${c.prazo ? ' · Responder até ' + formatDate(c.prazo) : ''}</div>
+      <div class="print-sub" style="font-size:14px; color:#111; margin-bottom:6px;"><strong>Fornecedor:</strong> ${nome ? escapeHtml(nome) : '______________________________'}</div>
+      <div class="print-sub" style="margin-bottom:6px;">Solicitamos cotação dos itens abaixo. Por favor preencha os valores unitários e totais e as condições comerciais.</div>
+      <table>
+        <thead><tr><th>#</th><th>Produto</th><th>Qtd</th><th>Valor unitário (R$)</th><th>Valor total (R$)</th></tr></thead>
+        <tbody>${linhas}</tbody>
+      </table>
+      <div class="print-sub" style="margin-top:20px; line-height:2.2; color:#111;">
+        Prazo de entrega: ____________________________________________<br>
+        Condições de pagamento: ______________________________________<br>
+        Frete: ______________________ &nbsp; Validade da proposta: ______________<br>
+        Observações: ________________________________________________
+      </div>
+      <div class="print-signature">
+        <div>Comprador responsável</div>
+        <div>Assinatura / carimbo do fornecedor</div>
+      </div>
+      <div class="print-date">Data: ____ / ____ / ______</div>
+      <div class="print-footer">Documento gerado pelo Painel de Cotações.</div>
+    </div>`).join('');
   window.print();
 }
 
