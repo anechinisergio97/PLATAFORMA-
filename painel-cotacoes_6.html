@@ -174,6 +174,40 @@
   .mes-header:hover{color:var(--text);}
   .mes-header .mes-seta{display:inline-block; width:12px; font-size:9px;}
   .mes-header .mes-count{background:var(--panel-3); color:var(--muted); border-radius:10px; padding:1px 7px; font-size:10.5px;}
+  .rq-board{display:grid; grid-template-columns:repeat(6, minmax(230px, 1fr)); gap:12px; overflow-x:auto;}
+  @media (max-width: 700px){ .rq-board{grid-template-columns:1fr;} }
+  .rq-input{background:var(--bg); border:1px solid var(--line); color:var(--text); padding:9px 10px; border-radius:6px; font-size:13px; font-family:inherit;}
+  .rq-grid2{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+  .rq-card{cursor:pointer;}
+  .rq-card .produto{padding-right:0; font-size:13.5px;}
+  .rq-card .rq-meta{font-size:11.5px; color:var(--muted); line-height:1.5;}
+  .rq-card .rq-meta strong{color:var(--text); font-weight:600;}
+  .rq-tag{display:inline-block; font-size:10px; font-weight:700; padding:2px 7px; border-radius:10px; margin-bottom:6px;}
+  .rq-tag.urgente{background:rgba(255,107,107,.15); color:var(--danger);}
+  .rq-tag.normal{background:var(--panel-3); color:var(--muted);}
+  .rq-tag.cotar{background:rgba(95,227,163,.15); color:var(--ok);}
+  .rq-thumbs{display:flex; gap:4px; margin-top:6px;}
+  .rq-thumbs img{width:44px; height:44px; object-fit:cover; border-radius:5px; border:1px solid var(--line);}
+  .rq-item{background:var(--panel-2); border:1px solid var(--line); border-radius:8px; padding:10px; margin-bottom:8px;}
+  .rq-item input[type="text"], .rq-item input[type="number"], .rq-item input[type="url"]{
+    width:100%; background:var(--bg); border:1px solid var(--line); color:var(--text);
+    padding:7px 8px; border-radius:6px; font-size:13px; font-family:inherit; margin-bottom:6px;
+  }
+  .rq-item .rq-row3{display:grid; grid-template-columns:1fr 90px 90px; gap:8px;}
+  .rq-item .rq-item-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; font-size:12px; color:var(--muted);}
+  .rq-item .rq-linkrow{display:flex; gap:6px;}
+  .rq-item .rq-mini{background:none; border:none; color:var(--muted); cursor:pointer; font-size:12px;}
+  .rq-item .rq-mini:hover{color:var(--accent);}
+  .rq-item .rq-mini.danger:hover{color:var(--danger);}
+  .rq-photos{display:flex; gap:6px; flex-wrap:wrap; margin:6px 0;}
+  .rq-photo{position:relative;}
+  .rq-photo img{width:64px; height:64px; object-fit:cover; border-radius:6px; border:1px solid var(--line);}
+  .rq-photo button{position:absolute; top:-6px; right:-6px; background:var(--danger); color:#fff; border:none; border-radius:50%; width:18px; height:18px; cursor:pointer; font-size:11px; line-height:1;}
+  .rq-detail-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:10px 0 14px; font-size:13px;}
+  .rq-detail-grid .lbl{font-size:10.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em;}
+  .rq-detail-photos{display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;}
+  .rq-detail-photos img{width:110px; height:110px; object-fit:cover; border-radius:8px; border:1px solid var(--line);}
+  .rq-links a{display:block; color:var(--accent); font-size:12.5px; word-break:break-all; margin-top:4px;}
   .btn-copy-produtos{
     background:none; border:1px dashed var(--line); color:var(--muted); width:100%;
     padding:6px; border-radius:6px; cursor:pointer; font-size:11.5px; margin-bottom:8px;
@@ -427,6 +461,11 @@
         <div class="label">Relatórios</div>
         <div class="desc">Economias por mês ou ano</div>
       </div>
+      <div class="menu-card" id="menu-btn-requisicoes">
+        <div class="icon">📝</div>
+        <div class="label">Requisições</div>
+        <div class="desc">Pedidos de compra com fotos e links</div>
+      </div>
       <div class="menu-card" id="menu-btn-fornecedores">
         <div class="icon">🏢</div>
         <div class="label">Fornecedores</div>
@@ -478,6 +517,63 @@
     <tbody id="rel-table-body"></tbody>
   </table>
   <div class="rel-empty app-hidden" id="rel-empty">Nenhuma cotação aprovada nesse período.</div>
+</div>
+
+<div class="wrap app-hidden" id="requisicoes-screen">
+  <button class="back-to-menu" id="back-to-menu-requisicoes">← Voltar ao menu</button>
+  <div class="rel-header">
+    <div>
+      <div class="eyebrow">Compras · Requisições</div>
+      <h1 style="margin-top:4px;">Requisições de Compra</h1>
+      <div id="rq-sync" style="font-size:11px; color:var(--muted); margin-top:6px;">Conectando...</div>
+    </div>
+    <button class="logout-btn" id="btn-logout-rq">Sair</button>
+  </div>
+  <div class="toolbar">
+    <button class="primary" id="rq-btn-new">+ Nova requisição</button>
+    <input type="text" id="rq-search" class="rq-input" placeholder="Buscar produto, equipamento...">
+    <select id="rq-filter-prio" class="rq-input">
+      <option value="">Todas as prioridades</option>
+      <option value="urgente">Urgente</option>
+      <option value="normal">Normal</option>
+      <option value="cotar">Pode aguardar cotação</option>
+    </select>
+    <button class="ghost" id="rq-btn-excel">⬇ Excel</button>
+  </div>
+  <div class="rq-board" id="rq-board"></div>
+</div>
+
+<div class="modal-overlay" id="rq-form-overlay">
+  <div class="modal" style="max-width:640px;">
+    <h2 id="rq-form-title">Nova requisição</h2>
+    <div class="field"><label>Solicitante</label><input type="text" id="rq-f-solicitante"></div>
+    <div class="field"><label>Equipamento / máquina / veículo</label><input type="text" id="rq-f-equipamento" placeholder="Ex: Trator John Deere 6110, Caminhão Volvo FH..."></div>
+    <div class="rq-grid2">
+      <div class="field"><label>Prioridade</label>
+        <select id="rq-f-prio" class="rq-input" style="width:100%;">
+          <option value="normal">Normal</option>
+          <option value="urgente">Urgente</option>
+          <option value="cotar">Pode aguardar cotação</option>
+        </select>
+      </div>
+      <div class="field"><label>Necessário até</label><input type="date" id="rq-f-data"></div>
+    </div>
+    <div class="fornecedores-section">
+      <label>Itens (produto, quantidade, links e fotos)</label>
+      <div id="rq-items"></div>
+      <button type="button" class="btn-add-forn" id="rq-add-item">+ Adicionar item</button>
+    </div>
+    <div class="field" style="margin-top:14px;"><label>Observação</label><textarea id="rq-f-obs" placeholder="Detalhes que ajudam a cotar mais rápido"></textarea></div>
+    <div class="saving-hint" id="rq-form-state"></div>
+    <div class="modal-actions">
+      <button class="ghost" id="rq-cancel">Cancelar</button>
+      <button class="primary" id="rq-save">Enviar para Compras</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="rq-detail-overlay">
+  <div class="modal" style="max-width:680px;" id="rq-detail"></div>
 </div>
 
 <div class="wrap app-hidden" id="fornecedores-screen">
@@ -597,8 +693,11 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
-  getFirestore, doc, onSnapshot, setDoc
+  getFirestore, doc, onSnapshot, setDoc, collection, query, where, updateDoc, deleteDoc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import {
+  getStorage, ref, uploadBytes, getDownloadURL
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 import {
   getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
@@ -616,9 +715,15 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 const boardRef = doc(db, "painel", "cotacoes-board");
+const storage = getStorage(app);
+const reqRef = collection(db, "requisicoes");
 
 const ADMIN_UID = "Yt8MYvJldQb7XQGv8oydCCYdwQH3";
+// Usuários que só enxergam o módulo Requisições (nada de Cotações)
+const REQUISITANTE_UIDS = ["8j21dFV6bSMb2Gn24N8a4zdNwSo2"];
 let isAdmin = false;
+let isRequisitante = false;
+let currentUser = null;
 
 let unsubscribeBoard = null;
 
@@ -627,25 +732,39 @@ onAuthStateChanged(auth, (user) => {
   const menuScreen = document.getElementById('menu-screen');
   const appContent = document.getElementById('app-content');
   const relatoriosScreen = document.getElementById('relatorios-screen');
+  currentUser = user || null;
   if(user){
     isAdmin = user.uid === ADMIN_UID;
+    isRequisitante = REQUISITANTE_UIDS.includes(user.uid);
     document.body.classList.toggle('readonly-mode', !isAdmin);
+    ['menu-btn-painel','menu-btn-relatorios','menu-btn-fornecedores'].forEach(id => {
+      document.getElementById(id).classList.toggle('app-hidden', isRequisitante);
+    });
+    document.getElementById('back-to-menu-requisicoes').classList.toggle('app-hidden', isRequisitante);
     loginOverlay.classList.add('app-hidden');
     appContent.classList.add('app-hidden');
     relatoriosScreen.classList.add('app-hidden');
-    menuScreen.classList.remove('app-hidden');
-    if(!unsubscribeBoard){
-      unsubscribeBoard = startBoardListener();
+    if(isRequisitante){
+      // este usuário nunca carrega os dados de cotações
+      showScreen('requisicoes');
+      startRequisicoesListener();
+    } else {
+      showScreen('menu');
+      if(!unsubscribeBoard){
+        unsubscribeBoard = startBoardListener();
+      }
     }
   } else {
     loginOverlay.classList.remove('app-hidden');
     menuScreen.classList.add('app-hidden');
     appContent.classList.add('app-hidden');
     relatoriosScreen.classList.add('app-hidden');
+    document.getElementById('requisicoes-screen').classList.add('app-hidden');
     if(unsubscribeBoard){
       unsubscribeBoard();
       unsubscribeBoard = null;
     }
+    stopRequisicoesListener();
   }
 });
 
@@ -654,11 +773,14 @@ function showScreen(name){
   document.getElementById('app-content').classList.toggle('app-hidden', name !== 'painel');
   document.getElementById('relatorios-screen').classList.toggle('app-hidden', name !== 'relatorios');
   document.getElementById('fornecedores-screen').classList.toggle('app-hidden', name !== 'fornecedores');
+  document.getElementById('requisicoes-screen').classList.toggle('app-hidden', name !== 'requisicoes');
 }
 
 document.getElementById('menu-btn-painel').addEventListener('click', () => showScreen('painel'));
 document.getElementById('menu-btn-relatorios').addEventListener('click', () => { showScreen('relatorios'); renderRelatorio(); });
 document.getElementById('menu-btn-fornecedores').addEventListener('click', () => { showScreen('fornecedores'); renderFornecedoresCadastro(); });
+document.getElementById('menu-btn-requisicoes').addEventListener('click', () => { showScreen('requisicoes'); startRequisicoesListener(); });
+document.getElementById('back-to-menu-requisicoes').addEventListener('click', () => showScreen('menu'));
 document.getElementById('back-to-menu-painel').addEventListener('click', () => showScreen('menu'));
 document.getElementById('back-to-menu-relatorios').addEventListener('click', () => showScreen('menu'));
 document.getElementById('back-to-menu-fornecedores').addEventListener('click', () => showScreen('menu'));
@@ -1800,6 +1922,319 @@ document.getElementById('input-import').addEventListener('change', (e) => {
   };
   reader.readAsText(file);
   e.target.value = '';
+});
+
+// =====================================================================
+// MÓDULO REQUISIÇÕES
+// =====================================================================
+const RQ_STATUS = [
+  ['nova','Nova'], ['recebida','Recebida'], ['cotacao','Em cotação'],
+  ['autorizada','Compra autorizada'], ['comprada','Comprada / concluída'], ['recusada','Recusada']
+];
+const RQ_PRIO = { urgente: '🔴 Urgente', normal: '🟠 Normal', cotar: '🟢 Pode aguardar cotação' };
+let requisicoes = [];
+let unsubscribeReq = null;
+let rqEditingId = null;
+let rqDraft = [];
+let rqSelectedId = null;
+const rq$ = id => document.getElementById(id);
+
+function rqStatusLabel(st){ const f = RQ_STATUS.find(x => x[0] === st); return f ? f[1] : st; }
+function rqFmt(iso){ if(!iso) return '—'; const d = new Date(iso); return isNaN(d) ? '—' : d.toLocaleDateString('pt-BR'); }
+function rqFmtDia(v){ if(!v) return '—'; const d = new Date(v + 'T00:00:00'); return isNaN(d) ? '—' : d.toLocaleDateString('pt-BR'); }
+function rqSafeUrl(raw){
+  const v = (raw || '').trim();
+  if(!v) return '';
+  try{ const u = new URL(/^https?:\/\//i.test(v) ? v : 'https://' + v); return /^https?:$/i.test(u.protocol) ? u.href : ''; }catch(e){ return ''; }
+}
+
+function startRequisicoesListener(){
+  if(unsubscribeReq || !currentUser) return;
+  const q = isRequisitante ? query(reqRef, where('createdBy', '==', currentUser.uid)) : query(reqRef);
+  rq$('rq-sync').textContent = 'Conectando...';
+  unsubscribeReq = onSnapshot(q, (snap) => {
+    requisicoes = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => (b.criadoEm || '').localeCompare(a.criadoEm || ''));
+    rq$('rq-sync').innerHTML = '<span class="sync-dot online"></span>Sincronizado em tempo real';
+    renderRequisicoes();
+  }, (err) => {
+    console.error(err);
+    rq$('rq-sync').innerHTML = '<span class="sync-dot offline"></span>Sem acesso às requisições — verifique as regras do Firebase';
+  });
+}
+function stopRequisicoesListener(){
+  if(unsubscribeReq){ unsubscribeReq(); unsubscribeReq = null; }
+  requisicoes = [];
+}
+
+function rqFiltradas(){
+  const q = rq$('rq-search').value.toLowerCase().trim();
+  const p = rq$('rq-filter-prio').value;
+  return requisicoes.filter(r => {
+    if(p && r.prioridade !== p) return false;
+    if(!q) return true;
+    const blob = ((r.equipamento || '') + ' ' + (r.solicitanteNome || '') + ' ' + (r.itens || []).map(i => (i.produto || '') + ' ' + (i.referencia || '')).join(' ')).toLowerCase();
+    return blob.includes(q);
+  });
+}
+
+function renderRequisicoes(){
+  const data = rqFiltradas();
+  rq$('rq-board').innerHTML = RQ_STATUS.map(([st, label]) => {
+    const arr = data.filter(r => (r.status || 'nova') === st);
+    const cards = arr.map(r => {
+      const imgs = (r.itens || []).flatMap(i => i.photos || []).slice(0, 4);
+      const txt = (r.itens || []).map(i => `${escapeHtml(i.produto)} (${escapeHtml(i.quantidade)} ${escapeHtml(i.unidade || 'un')})`).join(' • ');
+      return `<div class="card rq-card" data-id="${escapeHtml(r.id)}">
+        <span class="rq-tag ${escapeHtml(r.prioridade || 'normal')}">${escapeHtml(RQ_PRIO[r.prioridade] || RQ_PRIO.normal)}</span>
+        <div class="produto">${txt || 'Requisição sem item'}</div>
+        <div class="rq-meta">
+          <div><strong>Equipamento:</strong> ${escapeHtml(r.equipamento || 'Não informado')}</div>
+          <div><strong>Solicitante:</strong> ${escapeHtml(r.solicitanteNome || '—')}</div>
+          <div><strong>Necessário até:</strong> ${rqFmtDia(r.dataNecessaria)}</div>
+        </div>
+        ${imgs.length ? `<div class="rq-thumbs">${imgs.map(u => `<img src="${escapeHtml(u)}" alt="Foto">`).join('')}</div>` : ''}
+      </div>`;
+    }).join('');
+    return `<div class="col"><div class="col-head"><span class="name">${label}</span><span class="count">${arr.length}</span></div>
+      <div class="col-body">${cards || '<div class="empty-hint">Nenhuma requisição</div>'}</div></div>`;
+  }).join('');
+  document.querySelectorAll('.rq-card').forEach(c => c.addEventListener('click', () => rqAbrirDetalhe(c.dataset.id)));
+}
+
+// ---------- formulário ----------
+function rqNovoItem(it){ return Object.assign({ produto:'', quantidade:'', unidade:'un', referencia:'', links:[], photos:[], files:[] }, it || {}); }
+
+function rqRenderItens(){
+  const box = rq$('rq-items');
+  box.innerHTML = '';
+  rqDraft.forEach((it, idx) => {
+    const div = document.createElement('div');
+    div.className = 'rq-item';
+    div.innerHTML = `
+      <div class="rq-item-head"><strong>Item ${idx + 1}</strong>
+        <span><button type="button" class="rq-mini add-link">+ Link</button>
+        <button type="button" class="rq-mini danger rm-item">Remover item</button></span></div>
+      <div class="rq-row3">
+        <input type="text" class="it-prod" placeholder="Produto / peça / serviço" value="${escapeHtml(it.produto)}">
+        <input type="number" class="it-qtd" min="0" step="any" placeholder="Qtd" value="${escapeHtml(it.quantidade)}">
+        <input type="text" class="it-un" placeholder="Un" value="${escapeHtml(it.unidade)}">
+      </div>
+      <input type="text" class="it-ref" placeholder="Código / referência / marca (opcional)" value="${escapeHtml(it.referencia)}">
+      <div class="it-links"></div>
+      <div class="rq-photos"></div>
+      <input type="file" class="it-files" accept="image/*" multiple>
+      <div class="saving-hint it-file-state" style="color:var(--muted);">${it.files.length ? it.files.length + ' foto(s) para enviar.' : 'Anexe fotos da peça/equipamento (reduzidas automaticamente).'}</div>`;
+    div.querySelector('.it-prod').addEventListener('input', e => it.produto = e.target.value);
+    div.querySelector('.it-qtd').addEventListener('input', e => it.quantidade = e.target.value);
+    div.querySelector('.it-un').addEventListener('input', e => it.unidade = e.target.value);
+    div.querySelector('.it-ref').addEventListener('input', e => it.referencia = e.target.value);
+    div.querySelector('.rm-item').addEventListener('click', () => { rqDraft.splice(idx, 1); if(!rqDraft.length) rqDraft.push(rqNovoItem()); rqRenderItens(); });
+    div.querySelector('.add-link').addEventListener('click', () => { it.links.push(''); rqRenderItens(); });
+    const linksBox = div.querySelector('.it-links');
+    it.links.forEach((u, li) => {
+      const row = document.createElement('div');
+      row.className = 'rq-linkrow';
+      row.innerHTML = `<input type="url" placeholder="https://..." value="${escapeHtml(u)}"><button type="button" class="rq-mini danger">×</button>`;
+      row.querySelector('input').addEventListener('input', e => it.links[li] = e.target.value);
+      row.querySelector('button').addEventListener('click', () => { it.links.splice(li, 1); rqRenderItens(); });
+      linksBox.appendChild(row);
+    });
+    const photosBox = div.querySelector('.rq-photos');
+    it.photos.forEach((u, pi) => {
+      const w = document.createElement('div');
+      w.className = 'rq-photo';
+      w.innerHTML = `<a href="${escapeHtml(u)}" target="_blank" rel="noopener"><img src="${escapeHtml(u)}" alt="Foto"></a><button type="button">×</button>`;
+      w.querySelector('button').addEventListener('click', () => { it.photos.splice(pi, 1); rqRenderItens(); });
+      photosBox.appendChild(w);
+    });
+    div.querySelector('.it-files').addEventListener('change', e => {
+      it.files = [...e.target.files];
+      div.querySelector('.it-file-state').textContent = it.files.length ? it.files.length + ' foto(s) para enviar.' : 'Anexe fotos da peça/equipamento (reduzidas automaticamente).';
+    });
+    box.appendChild(div);
+  });
+}
+
+function rqAbrirForm(r){
+  rqEditingId = r ? r.id : null;
+  rq$('rq-form-title').textContent = r ? 'Editar requisição' : 'Nova requisição';
+  rq$('rq-f-solicitante').value = r ? (r.solicitanteNome || '') : ((currentUser && currentUser.email) || '');
+  rq$('rq-f-equipamento').value = r ? (r.equipamento || '') : '';
+  rq$('rq-f-prio').value = r ? (r.prioridade || 'normal') : 'normal';
+  rq$('rq-f-data').value = r ? (r.dataNecessaria || '') : '';
+  rq$('rq-f-obs').value = r ? (r.observacao || '') : '';
+  rq$('rq-form-state').textContent = '';
+  rqDraft = (r && r.itens && r.itens.length) ? r.itens.map(i => rqNovoItem({ ...i, links: [...(i.links || [])], photos: [...(i.photos || [])], files: [] })) : [rqNovoItem()];
+  rqRenderItens();
+  rq$('rq-form-overlay').classList.add('open');
+}
+
+async function rqComprimir(file, max, qual){
+  if(!file.type.startsWith('image/')) return file;
+  const img = new Image();
+  const url = URL.createObjectURL(file);
+  try{
+    await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
+    const scale = Math.min(1, max / Math.max(img.width, img.height));
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(img.width * scale));
+    c.height = Math.max(1, Math.round(img.height * scale));
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    return await new Promise(resolve => c.toBlob(b => resolve(b || file), 'image/jpeg', qual));
+  } finally { URL.revokeObjectURL(url); }
+}
+function rqBlobParaDataUrl(blob){
+  return new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(blob); });
+}
+async function rqEnviarFoto(file, reqId, idx){
+  try{
+    const blob = await rqComprimir(file, 1400, 0.82);
+    const r = ref(storage, `requisicoes/${reqId}/item_${idx}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.jpg`);
+    const upload = (async () => { await uploadBytes(r, blob, { contentType: 'image/jpeg' }); return await getDownloadURL(r); })();
+    const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 20000));
+    return await Promise.race([upload, timeout]);
+  }catch(e){
+    // Storage indisponível (ex.: plano gratuito sem Storage): guarda uma versão menor dentro da própria requisição
+    console.warn('Storage indisponível, usando foto embutida', e);
+    const blob = await rqComprimir(file, 800, 0.6);
+    return await rqBlobParaDataUrl(blob);
+  }
+}
+
+async function rqSalvar(){
+  const itens = rqDraft.map(i => ({
+    produto: (i.produto || '').trim(),
+    quantidade: (i.quantidade || '').toString().trim(),
+    unidade: (i.unidade || '').trim() || 'un',
+    referencia: (i.referencia || '').trim(),
+    links: (i.links || []).map(rqSafeUrl).filter(Boolean),
+    photos: [...(i.photos || [])],
+    files: i.files || []
+  })).filter(i => i.produto || i.quantidade || i.referencia || i.links.length || i.photos.length || i.files.length);
+  if(!itens.length){ alert('Adicione pelo menos um item.'); return; }
+  if(itens.some(i => !i.produto)){ alert('Preencha o produto/peça em todos os itens.'); return; }
+  if(itens.some(i => !i.quantidade)){ alert('Preencha a quantidade em todos os itens.'); return; }
+
+  const btn = rq$('rq-save');
+  btn.disabled = true;
+  rq$('rq-form-state').textContent = 'Enviando...';
+  try{
+    const docRef = rqEditingId ? doc(db, 'requisicoes', rqEditingId) : doc(reqRef);
+    for(let i = 0; i < itens.length; i++){
+      for(const f of itens[i].files){ itens[i].photos.push(await rqEnviarFoto(f, docRef.id, i)); }
+      delete itens[i].files;
+    }
+    const tamanho = JSON.stringify(itens).length;
+    if(tamanho > 900000){
+      alert('As fotos ficaram pesadas demais para enviar. Remova algumas fotos ou use fotos menores.');
+      return;
+    }
+    const base = {
+      solicitanteNome: rq$('rq-f-solicitante').value.trim() || (currentUser.email || ''),
+      solicitanteEmail: currentUser.email || '',
+      equipamento: rq$('rq-f-equipamento').value.trim(),
+      prioridade: rq$('rq-f-prio').value,
+      dataNecessaria: rq$('rq-f-data').value || '',
+      observacao: rq$('rq-f-obs').value.trim(),
+      itens,
+      atualizadoEm: new Date().toISOString()
+    };
+    if(rqEditingId){
+      await updateDoc(docRef, base);
+    } else {
+      await setDoc(docRef, { ...base, status: 'nova', createdBy: currentUser.uid, criadoEm: new Date().toISOString() });
+    }
+    rq$('rq-form-overlay').classList.remove('open');
+  }catch(e){
+    console.error(e);
+    alert('Não foi possível salvar. Verifique a conexão e as regras do Firebase.');
+  }finally{
+    btn.disabled = false;
+    rq$('rq-form-state').textContent = '';
+  }
+}
+
+// ---------- detalhe ----------
+function rqAbrirDetalhe(id){
+  const r = requisicoes.find(x => x.id === id);
+  if(!r) return;
+  rqSelectedId = id;
+  const podeEditar = isAdmin || (isRequisitante && r.createdBy === currentUser.uid && (r.status || 'nova') === 'nova');
+  const itensHtml = (r.itens || []).map((it, i) => `
+    <div class="rq-item">
+      <div style="font-weight:700;">${i + 1}. ${escapeHtml(it.produto)}</div>
+      <div style="font-size:12.5px; color:var(--muted); margin-top:3px;">Qtd: ${escapeHtml(it.quantidade)} ${escapeHtml(it.unidade || '')}${it.referencia ? ' · Ref: ' + escapeHtml(it.referencia) : ''}</div>
+      ${(it.links || []).length ? `<div class="rq-links">${it.links.map(u => `<a href="${escapeHtml(u)}" target="_blank" rel="noopener">↗ ${escapeHtml(u)}</a>`).join('')}</div>` : ''}
+      ${(it.photos || []).length ? `<div class="rq-detail-photos">${it.photos.map(u => `<a href="${escapeHtml(u)}" target="_blank" rel="noopener"><img src="${escapeHtml(u)}" alt="Foto"></a>`).join('')}</div>` : ''}
+    </div>`).join('');
+  rq$('rq-detail').innerHTML = `
+    <h2>${escapeHtml((r.itens && r.itens[0] && r.itens[0].produto) || 'Requisição')}${(r.itens || []).length > 1 ? ' + ' + (r.itens.length - 1) + ' item(ns)' : ''}</h2>
+    <div class="rq-detail-grid">
+      <div><div class="lbl">Solicitante</div>${escapeHtml(r.solicitanteNome || '—')}</div>
+      <div><div class="lbl">Equipamento</div>${escapeHtml(r.equipamento || '—')}</div>
+      <div><div class="lbl">Prioridade</div>${escapeHtml(RQ_PRIO[r.prioridade] || RQ_PRIO.normal)}</div>
+      <div><div class="lbl">Necessário até</div>${rqFmtDia(r.dataNecessaria)}</div>
+      <div><div class="lbl">Criada em</div>${rqFmt(r.criadoEm)}</div>
+      <div><div class="lbl">Status</div>${escapeHtml(rqStatusLabel(r.status || 'nova'))}</div>
+    </div>
+    ${r.observacao ? `<div class="field"><label>Observação</label><div style="font-size:13px;">${escapeHtml(r.observacao)}</div></div>` : ''}
+    ${itensHtml}
+    ${isAdmin ? `<div class="field" style="margin-top:12px;"><label>Alterar status</label>
+      <select id="rq-d-status" class="rq-input" style="width:100%;">${RQ_STATUS.map(([v, l]) => `<option value="${v}" ${v === (r.status || 'nova') ? 'selected' : ''}>${l}</option>`).join('')}</select></div>` : ''}
+    <div class="modal-actions" style="flex-wrap:wrap;">
+      ${isAdmin ? '<button class="ghost" id="rq-d-del">Excluir</button><button class="ghost" id="rq-d-cotar">➜ Criar cotação</button>' : ''}
+      ${podeEditar ? '<button class="ghost" id="rq-d-edit">Editar</button>' : ''}
+      <button class="ghost" id="rq-d-close">Fechar</button>
+      ${isAdmin ? '<button class="primary" id="rq-d-save">Salvar status</button>' : ''}
+    </div>`;
+  rq$('rq-d-close').addEventListener('click', () => rq$('rq-detail-overlay').classList.remove('open'));
+  if(podeEditar) rq$('rq-d-edit').addEventListener('click', () => { rq$('rq-detail-overlay').classList.remove('open'); rqAbrirForm(r); });
+  if(isAdmin){
+    rq$('rq-d-save').addEventListener('click', async () => {
+      try{ await updateDoc(doc(db, 'requisicoes', id), { status: rq$('rq-d-status').value, atualizadoEm: new Date().toISOString() }); rq$('rq-detail-overlay').classList.remove('open'); }
+      catch(e){ console.error(e); alert('Não foi possível atualizar o status.'); }
+    });
+    rq$('rq-d-del').addEventListener('click', async () => {
+      if(!confirm('Excluir esta requisição?')) return;
+      try{ await deleteDoc(doc(db, 'requisicoes', id)); rq$('rq-detail-overlay').classList.remove('open'); }
+      catch(e){ console.error(e); alert('Não foi possível excluir.'); }
+    });
+    rq$('rq-d-cotar').addEventListener('click', async () => {
+      rq$('rq-detail-overlay').classList.remove('open');
+      showScreen('painel');
+      openModal(null);
+      const itens = r.itens || [];
+      document.getElementById('f-produto').value = (r.equipamento ? r.equipamento + ' — ' : '') + (itens[0] ? itens[0].produto : 'Requisição') + (itens.length > 1 ? ' (+' + (itens.length - 1) + ' itens)' : '');
+      fornRows = [{ nome:'', preco:'', condicoes:'', fechado:false,
+        produtos: itens.map(i => ({ id: uid('p'), descricao: i.produto, quantidade: i.quantidade, valorUnitario: '' })) }];
+      renderFornRows();
+      if(['nova','recebida'].includes(r.status || 'nova')){
+        try{ await updateDoc(doc(db, 'requisicoes', id), { status: 'cotacao', atualizadoEm: new Date().toISOString() }); }catch(e){ console.error(e); }
+      }
+    });
+  }
+  rq$('rq-detail-overlay').classList.add('open');
+}
+
+rq$('rq-btn-new').addEventListener('click', () => rqAbrirForm(null));
+rq$('rq-add-item').addEventListener('click', () => { rqDraft.push(rqNovoItem()); rqRenderItens(); });
+rq$('rq-cancel').addEventListener('click', () => rq$('rq-form-overlay').classList.remove('open'));
+rq$('rq-save').addEventListener('click', rqSalvar);
+rq$('rq-search').addEventListener('input', renderRequisicoes);
+rq$('rq-filter-prio').addEventListener('change', renderRequisicoes);
+rq$('rq-form-overlay').addEventListener('click', e => { if(e.target === rq$('rq-form-overlay')) rq$('rq-form-overlay').classList.remove('open'); });
+rq$('rq-detail-overlay').addEventListener('click', e => { if(e.target === rq$('rq-detail-overlay')) rq$('rq-detail-overlay').classList.remove('open'); });
+rq$('btn-logout-rq').addEventListener('click', () => signOut(auth));
+rq$('rq-btn-excel').addEventListener('click', () => {
+  const data = rqFiltradas();
+  if(!data.length){ alert('Nenhuma requisição para exportar.'); return; }
+  const linhas = [['Data', 'Status', 'Prioridade', 'Solicitante', 'Equipamento', 'Necessário até', 'Produto', 'Quantidade', 'Unidade', 'Referência', 'Links', 'Observação']];
+  data.forEach(r => (r.itens || [{}]).forEach(i => linhas.push([
+    rqFmt(r.criadoEm), rqStatusLabel(r.status || 'nova'), (RQ_PRIO[r.prioridade] || '').replace(/^\S+\s/, ''), r.solicitanteNome || '', r.equipamento || '',
+    rqFmtDia(r.dataNecessaria), i.produto || '', i.quantidade || '', i.unidade || '', i.referencia || '', (i.links || []).join(' | '), r.observacao || ''
+  ])));
+  exportarExcel('requisicoes-' + new Date().toISOString().slice(0, 10), [{ nome: 'Requisições', linhas }]);
 });
 
 function baixarBlob(blob, nome){
