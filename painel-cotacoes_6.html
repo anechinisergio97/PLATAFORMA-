@@ -211,6 +211,27 @@
   .cat-tag{display:inline-block; font-size:10px; font-weight:700; color:var(--accent); background:var(--panel-3); border:1px solid var(--line); border-radius:10px; padding:1px 8px; margin:-2px 0 8px;}
   .forn-add-row input:nth-child(3){flex:1; min-width:150px;}
   .fc-cat-input{background:var(--bg); border:1px solid var(--line); color:var(--text); padding:6px 8px; border-radius:6px; font-size:12.5px; width:160px; font-family:inherit;}
+  .forn-add-row input:nth-child(4){flex:1; min-width:150px;}
+  .fc-whats-input{background:var(--bg); border:1px solid var(--line); color:var(--text); padding:6px 8px; border-radius:6px; font-size:12.5px; width:150px; font-family:inherit;}
+  .cv-row{background:var(--panel-2); border:1px solid var(--line); border-radius:8px; padding:12px; margin-bottom:10px;}
+  .cv-head{display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px;}
+  .cv-nome{font-weight:700; font-size:14px;}
+  .cv-chip{font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:10px; background:var(--panel-3); color:var(--muted);}
+  .cv-chip.aguardando{color:var(--warn);}
+  .cv-chip.respondido{color:var(--ok);}
+  .cv-actions{display:flex; gap:8px; flex-wrap:wrap;}
+  .cv-actions button{font-size:12px; padding:6px 10px;}
+  .cv-resp{font-size:12.5px; color:var(--muted); margin:8px 0; line-height:1.6;}
+  .cv-resp strong{color:var(--text);}
+  .sp-wrap{max-width:620px; margin:0 auto; padding:6px 0 40px;}
+  .sp-item{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px; margin-bottom:10px;}
+  .sp-item .sp-nome{font-weight:700; font-size:15px;}
+  .sp-item .sp-qtd{color:var(--muted); font-size:12.5px; margin:2px 0 8px;}
+  .sp-row{display:grid; grid-template-columns:1fr 130px; gap:10px; align-items:center;}
+  .sp-sub{text-align:right; color:var(--accent); font-weight:700; font-size:14px;}
+  .sp-input{width:100%; background:var(--bg); border:1px solid var(--line); color:var(--text); padding:11px 12px; border-radius:8px; font-size:16px; font-family:inherit;}
+  .sp-total{display:flex; justify-content:space-between; font-weight:700; font-size:17px; padding:12px 4px;}
+  .sp-note{font-size:12px; color:var(--muted); margin:12px 0;}
   .btn-copy-produtos{
     background:none; border:1px dashed var(--line); color:var(--muted); width:100%;
     padding:6px; border-radius:6px; cursor:pointer; font-size:11.5px; margin-bottom:8px;
@@ -410,6 +431,7 @@
   body.readonly-mode #btn-import,
   body.readonly-mode #btn-reset,
   body.readonly-mode #btn-arquivar,
+  body.readonly-mode .convite-btn,
   body.readonly-mode .card .edit,
   body.readonly-mode .card .del,
   body.readonly-mode .forn-add-row,
@@ -581,6 +603,19 @@
   <div class="modal" style="max-width:680px;" id="rq-detail"></div>
 </div>
 
+<div class="modal-overlay" id="cv-overlay">
+  <div class="modal" style="max-width:640px;">
+    <h2>Enviar cotação aos fornecedores</h2>
+    <div class="saving-hint" style="color:var(--muted); margin:-8px 0 14px;">Cada fornecedor recebe um link próprio e só vê a lista de produtos. Ele não vê preço de ninguém.</div>
+    <div id="cv-list"></div>
+    <div class="modal-actions"><button class="ghost" id="cv-close">Fechar</button></div>
+  </div>
+</div>
+
+<div class="wrap app-hidden" id="fornecedor-screen">
+  <div class="sp-wrap" id="sp-content"></div>
+</div>
+
 <div class="wrap app-hidden" id="fornecedores-screen">
   <button class="back-to-menu" id="back-to-menu-fornecedores">← Voltar ao menu</button>
   <div class="rel-header">
@@ -594,6 +629,7 @@
     <input type="text" id="fc-nome-input" placeholder="Nome do fornecedor">
     <input type="text" id="fc-contato-input" placeholder="Contato (telefone, e-mail...) — opcional">
     <input type="text" id="fc-categoria-input" list="lista-categorias" placeholder="Categoria (ex: Peças, EPI)">
+    <input type="text" id="fc-whats-input" placeholder="WhatsApp com DDD (ex: 11 91234-5678)">
     <button class="primary" id="fc-btn-add">+ Adicionar</button>
   </div>
 
@@ -703,7 +739,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
-  getFirestore, doc, onSnapshot, setDoc, collection, query, where, updateDoc, deleteDoc
+  getFirestore, doc, onSnapshot, setDoc, getDoc, collection, query, where, updateDoc, deleteDoc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
   getStorage, ref, uploadBytes, getDownloadURL
@@ -719,6 +755,8 @@ import {
 const ADMIN_UID = "Yt8MYvJldQb7XQGv8oydCCYdwQH3";
 // 2) UIDs de quem só enxerga o módulo Requisições (nada de Cotações)
 const REQUISITANTE_UIDS = ["8j21dFV6bSMb2Gn24N8a4zdNwSo2"];
+// Nome da empresa (aparece na mensagem enviada ao fornecedor). Pode deixar vazio.
+const EMPRESA_NOME = "";
 // 3) Chaves do projeto Firebase da empresa (Firebase > Configurações do projeto > Seus apps)
 const firebaseConfig = {
   apiKey: "AIzaSyCFxNa7Dn8erGgLOe3MeVPUiCPDQ8ZmTgI",
@@ -729,6 +767,8 @@ const firebaseConfig = {
   appId: "1:723707624476:web:a9e24ec5310110383b33d9"
 };
 
+// Link de cotação enviado ao fornecedor (?r=codigo): abre só a tela do fornecedor
+const SUPPLIER_TOKEN = new URLSearchParams(location.search).get('r');
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
@@ -743,6 +783,7 @@ let currentUser = null;
 let unsubscribeBoard = null;
 
 onAuthStateChanged(auth, (user) => {
+  if(SUPPLIER_TOKEN) return; // modo fornecedor não usa login
   const loginOverlay = document.getElementById('login-overlay');
   const menuScreen = document.getElementById('menu-screen');
   const appContent = document.getElementById('app-content');
@@ -768,6 +809,7 @@ onAuthStateChanged(auth, (user) => {
       if(!unsubscribeBoard){
         unsubscribeBoard = startBoardListener();
       }
+      if(isAdmin) startConvitesListener();
     }
   } else {
     loginOverlay.classList.remove('app-hidden');
@@ -780,6 +822,7 @@ onAuthStateChanged(auth, (user) => {
       unsubscribeBoard = null;
     }
     stopRequisicoesListener();
+    stopConvitesListener();
   }
 });
 
@@ -869,8 +912,13 @@ function renderFornecedoresCadastro(){
           ${f.contato ? `<div class="fc-contato">${escapeHtml(f.contato)}</div>` : ''}
         </div>
         <input type="text" class="fc-cat-input" list="lista-categorias" placeholder="Categoria" value="${escapeHtml(f.categoria || '')}" ${isAdmin ? '' : 'disabled'}>
+        <input type="text" class="fc-whats-input" placeholder="WhatsApp" value="${escapeHtml(f.whatsapp || '')}" ${isAdmin ? '' : 'disabled'}>
         <button class="fc-del" data-id="${f.id}" title="Remover">×</button>
       `;
+      item.querySelector('.fc-whats-input').addEventListener('change', (e) => {
+        f.whatsapp = e.target.value.trim();
+        saveData();
+      });
       item.querySelector('.fc-cat-input').addEventListener('change', (e) => {
         f.categoria = e.target.value.trim();
         saveData();
@@ -894,11 +942,12 @@ document.getElementById('fc-btn-add').addEventListener('click', () => {
     alert('Esse fornecedor já está cadastrado.');
     return;
   }
-  fornecedoresCadastrados.push({ id: uid('fc'), nome, contato: contatoInput.value.trim(), categoria: document.getElementById('fc-categoria-input').value.trim() });
+  fornecedoresCadastrados.push({ id: uid('fc'), nome, contato: contatoInput.value.trim(), categoria: document.getElementById('fc-categoria-input').value.trim(), whatsapp: document.getElementById('fc-whats-input').value.trim() });
   saveData();
   nomeInput.value = '';
   contatoInput.value = '';
   document.getElementById('fc-categoria-input').value = '';
+  document.getElementById('fc-whats-input').value = '';
   renderFornecedoresCadastro();
 });
 
@@ -1226,11 +1275,13 @@ function render(){
       }
 
       const late = c.status !== 'aprovada' && c.status !== 'perdida' && isLate(c.prazo);
+      const pendResp = convites.filter(v => v.cotacaoId === c.id && v.status === 'respondido' && !v.importado).length;
 
       card.innerHTML = `
         <div class="actions">
           <button class="print-btn" data-id="${c.id}" title="Imprimir / Salvar PDF">🖨️</button>
           <button class="rfq-btn" data-id="${c.id}" title="Requisição de cotação para enviar aos fornecedores (sem preços)">📨</button>
+          <button class="convite-btn" data-id="${c.id}" title="Enviar link de cotação aos fornecedores (WhatsApp)">📲${pendResp ? '<sup style="color:var(--accent);font-weight:700;">' + pendResp + '</sup>' : ''}</button>
           ${fechado ? `<button class="pedido-btn" data-id="${c.id}" title="Gerar pedido de compra">🧾</button>` : ''}
           ${fechado ? `<button class="estoque-btn" data-id="${c.id}" title="Lista de entregas para o estoque (sem preços)">📦</button>` : ''}
           <button class="edit" data-id="${c.id}" title="Editar">✎</button>
@@ -1283,6 +1334,12 @@ function render(){
     });
   });
 
+  document.querySelectorAll('.convite-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      abrirConvites(btn.dataset.id);
+    });
+  });
   document.querySelectorAll('.rfq-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -2309,6 +2366,284 @@ rq$('rq-btn-excel').addEventListener('click', () => {
   ])));
   exportarExcel('requisicoes-' + new Date().toISOString().slice(0, 10), [{ nome: 'Requisições', linhas }]);
 });
+
+// =====================================================================
+// LINK DE COTAÇÃO PARA O FORNECEDOR (preços isolados) + WHATSAPP
+// =====================================================================
+let convites = [];
+let unsubscribeConvites = null;
+let conviteCotacaoId = null;
+
+function startConvitesListener(){
+  if(unsubscribeConvites || !isAdmin) return;
+  unsubscribeConvites = onSnapshot(collection(db, 'convites'), (snap) => {
+    convites = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    render();
+    if(document.getElementById('cv-overlay').classList.contains('open')) renderConvitesModal();
+  }, (err) => { console.warn('Convites indisponíveis (confira as regras do Firebase)', err); });
+}
+function stopConvitesListener(){
+  if(unsubscribeConvites){ unsubscribeConvites(); unsubscribeConvites = null; }
+  convites = [];
+}
+
+function normProd(t){ return (t || '').trim().toLowerCase().replace(/\s+/g, ' '); }
+function novoToken(){ return Array.from(crypto.getRandomValues(new Uint8Array(18))).map(b => b.toString(16).padStart(2, '0')).join(''); }
+function linkConvite(token){ return location.origin + location.pathname + '?r=' + token; }
+function conviteDe(c, f){ return convites.find(v => v.cotacaoId === c.id && v.fornecedorId === f.id); }
+
+function itensParaConvite(c){
+  const lista = [];
+  const mapa = {};
+  (c.fornecedores || []).forEach(f => getProdutosForPrint(f).forEach(prod => {
+    const nome = (prod.descricao || '').trim() || c.produto;
+    const k = normProd(nome);
+    if(!mapa[k]){ mapa[k] = { descricao: nome, quantidade: '' }; lista.push(mapa[k]); }
+    if(!mapa[k].quantidade && (prod.quantidade || '').toString().trim()) mapa[k].quantidade = prod.quantidade;
+  }));
+  if(!lista.length) lista.push({ descricao: c.produto, quantidade: '' });
+  return lista.map((it, i) => ({ id: 'i' + (i + 1), descricao: it.descricao, quantidade: it.quantidade }));
+}
+
+async function criarConvite(c, f){
+  if(!f.id){ f.id = uid('f'); await saveData(); }
+  const token = novoToken();
+  await setDoc(doc(db, 'convites', token), {
+    cotacaoId: c.id, fornecedorId: f.id, fornecedorNome: f.nome, titulo: c.produto,
+    empresa: EMPRESA_NOME || '', prazoResposta: c.prazo || '', itens: itensParaConvite(c),
+    status: 'aberto', resposta: null, importado: false, criadoEm: new Date().toISOString()
+  });
+  return token;
+}
+
+function whatsDoFornecedor(f){
+  const cad = fornecedoresCadastrados.find(x => normalizarNome(x.nome) === normalizarNome(f.nome));
+  return cad && cad.whatsapp ? cad.whatsapp : '';
+}
+function digitosWhats(t){
+  let d = (t || '').replace(/\D/g, '');
+  if(d.length >= 10 && d.length <= 11) d = '55' + d;
+  return d;
+}
+function pedirWhatsSeFaltar(f){
+  let tel = whatsDoFornecedor(f);
+  if(tel) return tel;
+  tel = (prompt('WhatsApp de ' + f.nome + ' (com DDD). Ele fica salvo no cadastro de fornecedores:') || '').trim();
+  if(tel){
+    registrarFornecedorSeNovo(f.nome, true, '');
+    const cad = fornecedoresCadastrados.find(x => normalizarNome(x.nome) === normalizarNome(f.nome));
+    if(cad){ cad.whatsapp = tel; saveData(); }
+  }
+  return tel;
+}
+function mensagemWhats(c, f, token){
+  return 'Olá, ' + f.nome + '! Segue o link para você informar seus preços da cotação "' + c.produto + '"'
+    + (EMPRESA_NOME ? ' — ' + EMPRESA_NOME : '') + '.'
+    + (c.prazo ? ' Responder até ' + formatDate(c.prazo) + '.' : '')
+    + '\n' + linkConvite(token);
+}
+async function copiarTexto(t){
+  try{ await navigator.clipboard.writeText(t); return true; }
+  catch(e){ prompt('Copie o link:', t); return false; }
+}
+
+function abrirConvites(id){
+  conviteCotacaoId = id;
+  renderConvitesModal();
+  document.getElementById('cv-overlay').classList.add('open');
+}
+
+function renderConvitesModal(){
+  const c = cotacoes.find(x => x.id === conviteCotacaoId);
+  const box = document.getElementById('cv-list');
+  if(!c){ box.innerHTML = ''; return; }
+  const forns = c.fornecedores || [];
+  if(!forns.length){ box.innerHTML = '<div class="rel-empty">Adicione ao menos um fornecedor na cotação antes de enviar o link.</div>'; return; }
+  box.innerHTML = forns.map((f, idx) => {
+    const cv = conviteDe(c, f);
+    let chip = '<span class="cv-chip">Sem link</span>';
+    let corpo = '';
+    let botoes = `<button class="primary" data-act="whats" data-idx="${idx}">📲 Enviar por WhatsApp</button>
+      <button class="ghost" data-act="copiar" data-idx="${idx}">🔗 Copiar link</button>`;
+    if(cv && cv.status === 'aberto'){
+      chip = '<span class="cv-chip aguardando">Aguardando resposta</span>';
+      botoes = `<button class="primary" data-act="whats" data-idx="${idx}">📲 Reenviar</button>
+        <button class="ghost" data-act="copiar" data-idx="${idx}">🔗 Copiar link</button>
+        <button class="ghost" data-act="cancelar" data-idx="${idx}">Cancelar link</button>`;
+    } else if(cv && cv.status === 'respondido'){
+      chip = `<span class="cv-chip respondido">${cv.importado ? 'Respondido · importado' : 'Respondido'}</span>`;
+      const r = cv.resposta || {};
+      const linhas = (cv.itens || []).map(it => {
+        const x = (r.itens || []).find(y => y.id === it.id);
+        return `${escapeHtml(it.descricao)} (${escapeHtml(it.quantidade || '—')}): <strong>${x && x.valorUnitario ? 'R$ ' + escapeHtml(x.valorUnitario) : '—'}</strong>`;
+      }).join('<br>');
+      corpo = `<div class="cv-resp">${linhas}
+        ${r.prazoEntrega ? '<br>Prazo de entrega: <strong>' + escapeHtml(r.prazoEntrega) + '</strong>' : ''}
+        ${r.condicoes ? '<br>Pagamento/condições: <strong>' + escapeHtml(r.condicoes) + '</strong>' : ''}
+        ${r.validade ? '<br>Validade: <strong>' + escapeHtml(r.validade) + '</strong>' : ''}
+        ${r.observacao ? '<br>Obs.: ' + escapeHtml(r.observacao) : ''}</div>`;
+      botoes = `<button class="primary" data-act="importar" data-idx="${idx}">⬇ ${cv.importado ? 'Importar de novo' : 'Importar preços para a cotação'}</button>
+        <button class="ghost" data-act="reabrir" data-idx="${idx}">Pedir nova resposta</button>`;
+    }
+    return `<div class="cv-row"><div class="cv-head"><span class="cv-nome">${escapeHtml(f.nome)}</span>${chip}</div>${corpo}<div class="cv-actions">${botoes}</div></div>`;
+  }).join('');
+}
+
+document.getElementById('cv-list').addEventListener('click', async (e) => {
+  const btn = e.target.closest('button[data-act]');
+  if(!btn) return;
+  const c = cotacoes.find(x => x.id === conviteCotacaoId);
+  if(!c) return;
+  const f = (c.fornecedores || [])[parseInt(btn.dataset.idx, 10)];
+  if(!f) return;
+  const act = btn.dataset.act;
+  try{
+    if(act === 'whats'){
+      const tel = pedirWhatsSeFaltar(f);
+      const w = window.open('about:blank', '_blank');
+      let cv = conviteDe(c, f);
+      const token = cv ? cv.id : await criarConvite(c, f);
+      const msg = mensagemWhats(c, f, token);
+      const url = (tel ? 'https://wa.me/' + digitosWhats(tel) : 'https://wa.me/') + '?text=' + encodeURIComponent(msg);
+      if(w) w.location.href = url; else { await copiarTexto(msg); alert('Não consegui abrir o WhatsApp. A mensagem foi copiada, é só colar na conversa.'); }
+    } else if(act === 'copiar'){
+      let cv = conviteDe(c, f);
+      const token = cv ? cv.id : await criarConvite(c, f);
+      if(await copiarTexto(linkConvite(token))) alert('Link copiado! Cole na conversa com o fornecedor.');
+    } else if(act === 'cancelar'){
+      const cv = conviteDe(c, f);
+      if(cv && confirm('Cancelar o link de ' + f.nome + '? Ele deixará de funcionar.')) await deleteDoc(doc(db, 'convites', cv.id));
+    } else if(act === 'reabrir'){
+      const cv = conviteDe(c, f);
+      if(cv && confirm('Reabrir o mesmo link para o fornecedor responder de novo?')) await updateDoc(doc(db, 'convites', cv.id), { status: 'aberto', resposta: null, importado: false });
+    } else if(act === 'importar'){
+      const cv = conviteDe(c, f);
+      if(cv) await importarResposta(c, f, cv);
+    }
+  }catch(err){
+    console.error(err);
+    alert('Não foi possível concluir. Confirme se as regras do Firebase foram atualizadas (coleção "convites").');
+  }
+});
+document.getElementById('cv-close').addEventListener('click', () => document.getElementById('cv-overlay').classList.remove('open'));
+document.getElementById('cv-overlay').addEventListener('click', (e) => { if(e.target === document.getElementById('cv-overlay')) document.getElementById('cv-overlay').classList.remove('open'); });
+
+async function importarResposta(c, f, cv){
+  const r = cv.resposta;
+  if(!r) return;
+  if(!f.produtos || !f.produtos.length){
+    f.produtos = getProdutosForPrint(f).map(p => ({ id: uid('p'), descricao: p.descricao || '', quantidade: p.quantidade || '', valorUnitario: p.valorUnitario || '', desconto: '', fechado: false }));
+  }
+  (cv.itens || []).forEach(it => {
+    const resp = (r.itens || []).find(x => x.id === it.id);
+    if(!resp || !(resp.valorUnitario || '').toString().trim()) return;
+    const k = normProd(it.descricao);
+    let prod = f.produtos.find(p => normProd(p.descricao || c.produto) === k);
+    if(!prod){
+      prod = { id: uid('p'), descricao: it.descricao, quantidade: it.quantidade || '', valorUnitario: '', desconto: '', fechado: false };
+      f.produtos.push(prod);
+    }
+    prod.valorUnitario = resp.valorUnitario;
+    if(!(prod.quantidade || '').toString().trim()) prod.quantidade = it.quantidade || '';
+  });
+  f.preco = formatMoney(f.produtos.reduce((sum, p) => sum + produtoSubtotal(p), 0));
+  const partes = [];
+  if(r.prazoEntrega) partes.push('Prazo de entrega: ' + r.prazoEntrega);
+  if(r.condicoes) partes.push(r.condicoes);
+  if(r.validade) partes.push('Validade: ' + r.validade);
+  if(r.observacao) partes.push(r.observacao);
+  const txt = partes.join(' · ');
+  if(txt && !(f.condicoes || '').includes(txt)) f.condicoes = f.condicoes ? f.condicoes + ' | ' + txt : txt;
+  await saveData();
+  await updateDoc(doc(db, 'convites', cv.id), { importado: true });
+}
+
+// ---------- tela do fornecedor (abre com ?r=codigo) ----------
+async function iniciarModoFornecedor(){
+  document.getElementById('login-overlay').classList.add('app-hidden');
+  document.getElementById('fornecedor-screen').classList.remove('app-hidden');
+  const el = document.getElementById('sp-content');
+  const aviso = (t) => { el.innerHTML = `<div class="rel-empty">${t}</div>`; };
+  aviso('Carregando...');
+  let cv;
+  try{
+    const snap = await getDoc(doc(db, 'convites', SUPPLIER_TOKEN));
+    if(!snap.exists()){ aviso('Este link não é válido ou foi cancelado. Peça um novo link ao comprador.'); return; }
+    cv = snap.data();
+  }catch(e){ console.error(e); aviso('Não foi possível abrir este link agora. Tente novamente em instantes.'); return; }
+
+  const cab = `<div class="eyebrow" style="font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--accent-dim); font-weight:700;">${escapeHtml(cv.empresa || 'Solicitação de cotação')}</div>
+    <h1 style="margin:4px 0 4px; font-size:26px;">Cotação: ${escapeHtml(cv.titulo || '')}</h1>
+    <div style="color:var(--muted); font-size:13px; margin-bottom:16px;">Fornecedor: <strong style="color:var(--text);">${escapeHtml(cv.fornecedorNome || '')}</strong>${cv.prazoResposta ? ' · Responder até ' + formatDate(cv.prazoResposta) : ''}</div>`;
+
+  if(cv.status === 'respondido' && cv.resposta){
+    const r = cv.resposta;
+    const linhas = (cv.itens || []).map(it => {
+      const x = (r.itens || []).find(y => y.id === it.id);
+      return `<div class="sp-item"><div class="sp-nome">${escapeHtml(it.descricao)}</div><div class="sp-qtd">Quantidade: ${escapeHtml(it.quantidade || '—')}</div><div>Seu valor unitário: <strong>${x && x.valorUnitario ? 'R$ ' + escapeHtml(x.valorUnitario) : '—'}</strong></div></div>`;
+    }).join('');
+    el.innerHTML = cab + `<div class="sp-item" style="border-color:var(--ok);"><strong style="color:var(--ok);">✔ Cotação enviada. Obrigado!</strong><div class="sp-note" style="margin-bottom:0;">O comprador já recebeu os seus valores. Se precisar corrigir algo, peça a ele para reabrir o link.</div></div>` + linhas;
+    return;
+  }
+
+  el.innerHTML = cab + `
+    ${(cv.itens || []).map((it, i) => `
+      <div class="sp-item" data-id="${escapeHtml(it.id)}">
+        <div class="sp-nome">${escapeHtml(it.descricao)}</div>
+        <div class="sp-qtd">Quantidade: ${escapeHtml(it.quantidade || '—')}</div>
+        <div class="sp-row">
+          <input class="sp-input sp-vu" inputmode="decimal" placeholder="Valor unitário (R$)">
+          <div class="sp-sub">R$ 0,00</div>
+        </div>
+      </div>`).join('')}
+    <div class="sp-total"><span>Total</span><span id="sp-total-v">R$ 0,00</span></div>
+    <div class="field"><label>Prazo de entrega</label><input class="sp-input" id="sp-prazo" placeholder="Ex: 5 dias úteis"></div>
+    <div class="field"><label>Condições de pagamento</label><input class="sp-input" id="sp-cond" placeholder="Ex: 28 dias, boleto"></div>
+    <div class="field"><label>Validade da proposta</label><input class="sp-input" id="sp-valid" placeholder="Ex: 7 dias"></div>
+    <div class="field"><label>Observações (frete, marca, etc.)</label><textarea class="sp-input" id="sp-obs" rows="2"></textarea></div>
+    <div class="sp-note">🔒 Os seus valores são vistos somente pelo comprador. Outros fornecedores não têm acesso a eles.</div>
+    <button class="primary" id="sp-enviar" style="width:100%; padding:14px; font-size:16px;">Enviar cotação</button>`;
+
+  const qtdDe = (id) => { const it = (cv.itens || []).find(x => x.id === id); return parseFloat(((it && it.quantidade) || '').toString().replace(',', '.')) || 0; };
+  const recalc = () => {
+    let total = 0;
+    el.querySelectorAll('.sp-item[data-id]').forEach(box => {
+      const v = parsePrice(box.querySelector('.sp-vu').value) || 0;
+      const sub = v * qtdDe(box.dataset.id);
+      total += sub;
+      box.querySelector('.sp-sub').textContent = 'R$ ' + formatMoney(sub);
+    });
+    document.getElementById('sp-total-v').textContent = 'R$ ' + formatMoney(total);
+  };
+  el.querySelectorAll('.sp-vu').forEach(i => i.addEventListener('input', recalc));
+
+  document.getElementById('sp-enviar').addEventListener('click', async () => {
+    const itens = [...el.querySelectorAll('.sp-item[data-id]')].map(box => ({ id: box.dataset.id, valorUnitario: box.querySelector('.sp-vu').value.trim() }));
+    if(!itens.some(i => parsePrice(i.valorUnitario) !== null && i.valorUnitario)){ alert('Informe o valor de pelo menos um item.'); return; }
+    if(!confirm('Enviar a cotação? Depois de enviada, só o comprador pode reabrir para correção.')) return;
+    const btn = document.getElementById('sp-enviar');
+    btn.disabled = true; btn.textContent = 'Enviando...';
+    try{
+      await updateDoc(doc(db, 'convites', SUPPLIER_TOKEN), {
+        resposta: {
+          itens,
+          prazoEntrega: document.getElementById('sp-prazo').value.trim(),
+          condicoes: document.getElementById('sp-cond').value.trim(),
+          validade: document.getElementById('sp-valid').value.trim(),
+          observacao: document.getElementById('sp-obs').value.trim(),
+          respondidoEm: new Date().toISOString()
+        },
+        status: 'respondido'
+      });
+      el.innerHTML = cab + '<div class="sp-item" style="border-color:var(--ok);"><strong style="color:var(--ok);">✔ Cotação enviada. Obrigado!</strong><div class="sp-note" style="margin-bottom:0;">O comprador já recebeu os seus valores.</div></div>';
+    }catch(err){
+      console.error(err);
+      btn.disabled = false; btn.textContent = 'Enviar cotação';
+      alert('Não foi possível enviar agora. Confira a internet e tente de novo.');
+    }
+  });
+}
+if(SUPPLIER_TOKEN) iniciarModoFornecedor();
 
 function baixarBlob(blob, nome){
   const url = URL.createObjectURL(blob);
