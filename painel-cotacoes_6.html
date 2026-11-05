@@ -2388,8 +2388,8 @@ function stopConvitesListener(){
 }
 
 function normProd(t){ return (t || '').trim().toLowerCase().replace(/\s+/g, ' '); }
-function novoToken(){ return Array.from(crypto.getRandomValues(new Uint8Array(18))).map(b => b.toString(16).padStart(2, '0')).join(''); }
-function linkConvite(token){ return location.origin + location.pathname + '?r=' + token; }
+function novoToken(){ const a = 'abcdefghijkmnpqrstuvwxyz23456789'; return Array.from(crypto.getRandomValues(new Uint8Array(12))).map(b => a[b % a.length]).join(''); }
+function linkConvite(token){ return location.origin + location.pathname.replace(/index\.html$/, '') + '?r=' + token; }
 function conviteDe(c, f){ return convites.find(v => v.cotacaoId === c.id && v.fornecedorId === f.id); }
 
 function itensParaConvite(c){
