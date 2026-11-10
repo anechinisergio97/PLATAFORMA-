@@ -2,8 +2,17 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Painel de Cotações</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#101511">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Cotações">
+<meta name="format-detection" content="telephone=no">
+<meta name="robots" content="noindex, nofollow">
+<meta property="og:title" content="Solicitação de cotação">
+<meta property="og:description" content="Toque para informar seus preços.">
+<title>Cotação</title>
 <style>
   :root{
     --bg:#101511;
@@ -390,6 +399,117 @@
     background:none; border:none; color:var(--muted); cursor:pointer; font-size:16px; padding:4px 8px;
   }
   .forn-cadastro-item .fc-del:hover{color:var(--danger);}
+
+  /* ===== Adaptação a celulares / tablets (Android, iOS) ===== */
+  html{-webkit-text-size-adjust:100%; text-size-adjust:100%;}
+  html, body{max-width:100%; overflow-x:hidden;}
+  img, video{max-width:100%;}
+  button, .menu-card, .card{-webkit-tap-highlight-color:transparent; touch-action:manipulation;}
+  .col-tabs{display:none;}
+  .mover-sel{display:none;}
+  @media (max-width: 900px){
+    body{padding:14px max(12px, env(safe-area-inset-right)) calc(60px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));}
+    h1{font-size:24px;}
+    header{align-items:flex-start; gap:12px; margin-bottom:16px; padding-bottom:12px;}
+    .stats{display:grid; grid-template-columns:1fr 1fr; gap:10px 14px; width:100%;}
+    .stat{text-align:left;}
+    .stat .num{font-size:19px;}
+    .stat.excel-input, .stat.total-geral{text-align:left;}
+    .stat.excel-input input{width:100%; max-width:150px; text-align:left;}
+    .toolbar{gap:8px;}
+    .toolbar > *{flex:1 1 auto;}
+    button.primary, button.ghost, .back-to-menu, .logout-btn{min-height:44px; font-size:14px;}
+    .toolbar input, .toolbar select{min-height:44px; width:100%;}
+    .meta-block{padding:12px; gap:12px;}
+    .meta-bar-wrap{min-width:0; flex:1 1 100%;}
+
+    /* quadros: colunas deslizando para o lado, uma por vez */
+    .col-tabs{
+      display:flex; gap:6px; overflow-x:auto; padding:6px 0 10px; margin:0 -2px 6px;
+      position:sticky; top:0; z-index:30; background:var(--bg); scrollbar-width:none;
+    }
+    .col-tabs::-webkit-scrollbar{display:none;}
+    .col-tabs button{
+      flex:0 0 auto; background:var(--panel-2); border:1px solid var(--line); color:var(--muted);
+      border-radius:20px; padding:9px 14px; font-size:12.5px; font-weight:700; white-space:nowrap; min-height:40px;
+    }
+    .col-tabs button.on{background:var(--accent); color:#0c1210; border-color:var(--accent);}
+    .col-tabs button span{opacity:.75; margin-left:4px; font-weight:600;}
+    .board, .rq-board{
+      display:flex; grid-template-columns:none; overflow-x:auto; gap:10px;
+      scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain;
+      margin:0 -12px; padding:0 12px 12px; scrollbar-width:none;
+    }
+    .board::-webkit-scrollbar, .rq-board::-webkit-scrollbar{display:none;}
+    .board .col, .rq-board .col{flex:0 0 88%; scroll-snap-align:center; min-height:55vh; min-width:0;}
+    .wrap{overflow-x:visible;}
+
+    /* cartões */
+    .card{cursor:default; padding:14px;}
+    .card .produto{padding-right:0; font-size:15.5px;}
+    .card .actions{position:static; display:flex; flex-wrap:wrap; gap:6px; margin:0 0 10px;}
+    .card .actions button{
+      font-size:18px; min-width:44px; min-height:44px; padding:6px;
+      background:var(--panel-3); border:1px solid var(--line); border-radius:8px;
+    }
+    .forn-row{font-size:13px; padding:7px 9px;}
+    .mover-sel{
+      display:block; width:100%; margin-top:10px; min-height:44px; background:var(--panel-3); color:var(--text);
+      border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-size:16px; font-family:inherit;
+    }
+    .mes-header{padding:10px 2px; font-size:12px;}
+
+    /* telas e formulários */
+    input, select, textarea{font-size:16px !important;}
+    .field input, .field textarea, .rq-input, .forn-edit-row input[type="text"], .forn-edit-row textarea,
+    .rq-item input[type="text"], .rq-item input[type="number"], .rq-item input[type="url"]{min-height:44px;}
+    .modal-overlay{padding:0; align-items:flex-end;}
+    .modal{max-width:100% !important; width:100%; max-height:94vh; border-radius:16px 16px 0 0; padding:18px 14px calc(18px + env(safe-area-inset-bottom));}
+    .modal-actions{position:sticky; bottom:-18px; background:var(--panel); padding:12px 0 4px; gap:8px;}
+    .modal-actions button{flex:1; min-height:46px;}
+    .forn-edit-row .produto-row .produto-grid{grid-template-columns:56px 1fr 84px 28px;}
+    .forn-edit-row .remove-produto{font-size:20px; min-height:36px;}
+    .forn-edit-row .grid2{grid-template-columns:1fr 100px;}
+    .forn-edit-row .grid3{grid-template-columns:60px 1fr 100px;}
+    .rq-grid2, .rq-detail-grid{grid-template-columns:1fr;}
+    .rq-item .rq-row3{grid-template-columns:1fr 76px 76px;}
+    .cv-actions button{min-height:44px; flex:1 1 auto;}
+    .cv-head{flex-wrap:wrap;}
+
+    .menu-screen{min-height:70vh; gap:20px; justify-content:flex-start; padding-top:18px;}
+    .menu-cards{width:100%; gap:12px;}
+    .menu-card{width:100%; padding:20px; display:flex; flex-direction:column; align-items:center;}
+    .menu-card:hover{transform:none;}
+    .menu-card .icon{margin-bottom:8px;}
+
+    .rel-header{align-items:flex-start;}
+    .rel-controls{width:100%;}
+    .rel-controls select, .rel-controls input[type="month"], .rel-controls input[type="number"]{min-height:44px; flex:1 1 140px;}
+    #rel-ano{width:100px !important; flex:0 0 100px;}
+    .rel-toggle button{min-height:44px;}
+    .rel-cards{grid-template-columns:1fr 1fr; gap:10px;}
+    .rel-card{padding:14px;}
+    .rel-card .val{font-size:20px;}
+    .rel-table{display:block; overflow-x:auto; -webkit-overflow-scrolling:touch; white-space:nowrap;}
+
+    .forn-add-row input, .forn-add-row input:first-child, .forn-add-row input:nth-child(n){flex:1 1 100%; min-width:0; min-height:44px;}
+    .forn-add-row button{flex:1 1 100%;}
+    .forn-cadastro-item{flex-wrap:wrap;}
+    .fc-cat-input, .fc-whats-input{width:100%; min-height:40px;}
+    .login-box{margin:0 14px; padding:24px 20px;}
+    .login-box input{min-height:46px;}
+    .login-box button{min-height:48px;}
+    .sp-row{grid-template-columns:1fr;}
+    .sp-sub{text-align:left;}
+  }
+  @media (max-width: 380px){
+    .rel-cards{grid-template-columns:1fr;}
+    .stats{grid-template-columns:1fr;}
+  }
+  @media (hover:none) and (pointer:coarse){
+    .card[draggable="true"]{-webkit-user-drag:none;}
+    .menu-card:hover, .card:hover{transform:none;}
+  }
   #print-area{display:none;}
   @media print{
     body *{ visibility:hidden; }
@@ -768,7 +888,10 @@ const firebaseConfig = {
 };
 
 // Link de cotação enviado ao fornecedor (?r=codigo): abre só a tela do fornecedor
+// Link do fornecedor: se você tiver um domínio próprio apontando para este painel, coloque aqui (ex: "https://cotacao.suaempresa.com.br"). Vazio = usa encurtador automático.
+const DOMINIO_PROPRIO = "";
 const SUPPLIER_TOKEN = new URLSearchParams(location.search).get('r');
+if(!SUPPLIER_TOKEN) document.title = 'Painel de Cotações';
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
@@ -1295,6 +1418,10 @@ function render(){
           <span></span>
           <span class="prazo ${late ? 'late' : ''}">${c.prazo ? (late ? 'Atrasado ' : '') + formatDate(c.prazo) : ''}</span>
         </div>
+        ${isAdmin ? `<select class="mover-sel" data-id="${c.id}" aria-label="Mover cotação">
+          <option value="">↔ Mover para…</option>
+          ${[['enviada','Enviada'],['analise','Em análise'],['finalizacao','Finalização'],['aprovada','Aprovada'],['perdida','Perdida']].filter(x => x[0] !== c.status).map(x => `<option value="${x[0]}">${x[1]}</option>`).join('')}
+        </select>` : ''}
       `;
       card.addEventListener('dragstart', () => {
         draggedId = c.id;
@@ -1438,6 +1565,67 @@ document.querySelectorAll('.col').forEach(col => {
     }
     draggedId = null;
   });
+});
+
+
+// ---- Mobile: abas para alternar entre colunas dos quadros ----
+(function(){
+  function montarTabs(board){
+    if(!board) return;
+    let tabs = board.previousElementSibling;
+    if(!tabs || !tabs.classList.contains('col-tabs')){
+      tabs = document.createElement('div');
+      tabs.className = 'col-tabs';
+      board.parentNode.insertBefore(tabs, board);
+    }
+    const cols = [...board.querySelectorAll(':scope > .col')];
+    const atual = tabs.dataset.ativa ? parseInt(tabs.dataset.ativa, 10) : 0;
+    tabs.innerHTML = cols.map((c, i) => {
+      const n = (c.querySelector('.name') || {}).textContent || '';
+      const q = (c.querySelector('.count') || {}).textContent || '0';
+      return `<button type="button" data-i="${i}" class="${i === atual ? 'on' : ''}">${n}<span>${q}</span></button>`;
+    }).join('');
+  }
+  function marcar(board){
+    const tabs = board.previousElementSibling;
+    if(!tabs || !tabs.classList.contains('col-tabs')) return;
+    const cols = [...board.querySelectorAll(':scope > .col')];
+    if(!cols.length) return;
+    const centro = board.scrollLeft + board.clientWidth / 2;
+    let melhor = 0, dist = Infinity;
+    cols.forEach((c, i) => { const d = Math.abs(c.offsetLeft + c.offsetWidth / 2 - centro); if(d < dist){ dist = d; melhor = i; } });
+    tabs.dataset.ativa = melhor;
+    [...tabs.children].forEach((b, i) => b.classList.toggle('on', i === melhor));
+    const on = tabs.children[melhor];
+    if(on) tabs.scrollTo({ left: on.offsetLeft - 12, behavior: 'smooth' });
+  }
+  function init(id){
+    const board = document.getElementById(id);
+    if(!board) return;
+    montarTabs(board);
+    new MutationObserver(() => montarTabs(board)).observe(board, { childList:true, subtree:true, characterData:true });
+    let t;
+    board.addEventListener('scroll', () => { clearTimeout(t); t = setTimeout(() => marcar(board), 80); }, { passive:true });
+    document.addEventListener('click', (e) => {
+      const b = e.target.closest('.col-tabs button');
+      if(!b || b.parentNode.nextElementSibling !== board) return;
+      const col = board.querySelectorAll(':scope > .col')[parseInt(b.dataset.i, 10)];
+      if(col) board.scrollTo({ left: col.offsetLeft - board.offsetLeft - 12, behavior:'smooth' });
+    });
+  }
+  init('board');
+  init('rq-board');
+})();
+
+// ---- Mobile: mover cartão de coluna sem arrastar ----
+document.addEventListener('change', (e) => {
+  const sel = e.target.closest ? e.target.closest('.mover-sel') : null;
+  if(!sel || !isAdmin) return;
+  const c = cotacoes.find(x => x.id === sel.dataset.id);
+  if(!c || !sel.value) return;
+  c.status = sel.value;
+  if(sel.value === 'aprovada' && !c.dataAprovacaoISO) c.dataAprovacaoISO = new Date().toISOString().slice(0,10);
+  saveData();
 });
 
 // ---- Modal / form handling ----
@@ -2389,7 +2577,22 @@ function stopConvitesListener(){
 
 function normProd(t){ return (t || '').trim().toLowerCase().replace(/\s+/g, ' '); }
 function novoToken(){ const a = 'abcdefghijkmnpqrstuvwxyz23456789'; return Array.from(crypto.getRandomValues(new Uint8Array(12))).map(b => a[b % a.length]).join(''); }
-function linkConvite(token){ return location.origin + location.pathname.replace(/index\.html$/, '') + '?r=' + token; }
+function linkConvite(token){ return (DOMINIO_PROPRIO ? DOMINIO_PROPRIO.replace(/\/+$/, '') + '/' : location.origin + location.pathname.replace(/index\.html$/, '')) + '?r=' + token; }
+const linksCurtos = {};
+async function linkParaEnviar(token){
+  const longo = linkConvite(token);
+  if(DOMINIO_PROPRIO) return longo;
+  if(linksCurtos[token]) return linksCurtos[token];
+  try{
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 6000);
+    const r = await fetch('https://is.gd/create.php?format=json&url=' + encodeURIComponent(longo), { signal: ctrl.signal });
+    clearTimeout(t);
+    const j = await r.json();
+    if(j && j.shorturl){ linksCurtos[token] = j.shorturl; return j.shorturl; }
+  }catch(e){ console.warn('Encurtador indisponível, usando o link completo', e); }
+  return longo;
+}
 function conviteDe(c, f){ return convites.find(v => v.cotacaoId === c.id && v.fornecedorId === f.id); }
 
 function itensParaConvite(c){
@@ -2436,11 +2639,11 @@ function pedirWhatsSeFaltar(f){
   }
   return tel;
 }
-function mensagemWhats(c, f, token){
+function mensagemWhats(c, f, link){
   return 'Olá, ' + f.nome + '! Segue o link para você informar seus preços da cotação "' + c.produto + '"'
     + (EMPRESA_NOME ? ' — ' + EMPRESA_NOME : '') + '.'
     + (c.prazo ? ' Responder até ' + formatDate(c.prazo) + '.' : '')
-    + '\n' + linkConvite(token);
+    + '\n' + link;
 }
 async function copiarTexto(t){
   try{ await navigator.clipboard.writeText(t); return true; }
@@ -2503,13 +2706,13 @@ document.getElementById('cv-list').addEventListener('click', async (e) => {
       const w = window.open('about:blank', '_blank');
       let cv = conviteDe(c, f);
       const token = cv ? cv.id : await criarConvite(c, f);
-      const msg = mensagemWhats(c, f, token);
+      const msg = mensagemWhats(c, f, await linkParaEnviar(token));
       const url = (tel ? 'https://wa.me/' + digitosWhats(tel) : 'https://wa.me/') + '?text=' + encodeURIComponent(msg);
       if(w) w.location.href = url; else { await copiarTexto(msg); alert('Não consegui abrir o WhatsApp. A mensagem foi copiada, é só colar na conversa.'); }
     } else if(act === 'copiar'){
       let cv = conviteDe(c, f);
       const token = cv ? cv.id : await criarConvite(c, f);
-      if(await copiarTexto(linkConvite(token))) alert('Link copiado! Cole na conversa com o fornecedor.');
+      if(await copiarTexto(await linkParaEnviar(token))) alert('Link copiado! Cole na conversa com o fornecedor.');
     } else if(act === 'cancelar'){
       const cv = conviteDe(c, f);
       if(cv && confirm('Cancelar o link de ' + f.nome + '? Ele deixará de funcionar.')) await deleteDoc(doc(db, 'convites', cv.id));
