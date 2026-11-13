@@ -253,7 +253,9 @@
     background:var(--panel-3); border:1px solid var(--line); border-radius:6px; padding:8px; margin-bottom:6px;
   }
   .forn-edit-row .produto-row input[type="text"]{margin-bottom:6px;}
-  .forn-edit-row .produto-row .produto-grid{display:grid; grid-template-columns:60px 1fr 90px 22px; gap:6px; align-items:center;}
+  .forn-edit-row .produto-row .produto-grid{display:grid; grid-template-columns:60px 46px 1fr 90px 22px; gap:6px; align-items:center;}
+  .produto-obs{font-size:11.5px; color:var(--warn); background:var(--panel-2); border:1px dashed var(--line); border-radius:6px; padding:6px 8px; margin-bottom:6px;}
+  .sp-input.sp-obs-item{margin-top:8px; font-size:14px; padding:9px 12px;}
   .forn-edit-row .produto-row .produto-subtotal{
     background:var(--bg); border:1px solid var(--line); color:var(--accent); font-weight:700;
     padding:7px 6px; border-radius:6px; font-size:12px; text-align:right;
@@ -467,7 +469,9 @@
     .modal{max-width:100% !important; width:100%; max-height:94vh; border-radius:16px 16px 0 0; padding:18px 14px calc(18px + env(safe-area-inset-bottom));}
     .modal-actions{position:sticky; bottom:-18px; background:var(--panel); padding:12px 0 4px; gap:8px;}
     .modal-actions button{flex:1; min-height:46px;}
-    .forn-edit-row .produto-row .produto-grid{grid-template-columns:56px 1fr 84px 28px;}
+    .forn-edit-row .produto-row .produto-grid{grid-template-columns:52px 50px 1fr 30px; grid-template-areas:'q u v x' 's s s s';}
+    .produto-grid .produto-qtd-input{grid-area:q;} .produto-grid .produto-un-input{grid-area:u;} .produto-grid .produto-vunit-input{grid-area:v;}
+    .produto-grid .remove-produto{grid-area:x;} .produto-grid .produto-subtotal{grid-area:s;}
     .forn-edit-row .remove-produto{font-size:20px; min-height:36px;}
     .forn-edit-row .grid2{grid-template-columns:1fr 100px;}
     .forn-edit-row .grid3{grid-template-columns:60px 1fr 100px;}
@@ -727,6 +731,7 @@
   <div class="modal" style="max-width:640px;">
     <h2>Enviar cotação aos fornecedores</h2>
     <div class="saving-hint" style="color:var(--muted); margin:-8px 0 14px;">Cada fornecedor recebe um link próprio e só vê a lista de produtos. Ele não vê preço de ninguém.</div>
+    <div class="field"><label>Link válido até (depois dessa data o link mostra "cotação expirada")</label><input type="date" id="cv-prazo"></div>
     <div id="cv-list"></div>
     <div class="modal-actions"><button class="ghost" id="cv-close">Fechar</button></div>
   </div>
@@ -1291,6 +1296,7 @@ async function saveData(){
   }
 }
 
+function qtdU(p){ return [(p.quantidade || '').toString().trim(), (p.unidade || '').toString().trim()].filter(Boolean).join(' '); }
 function formatDate(d){
   if(!d) return '';
   const [y,m,day] = d.split('-');
@@ -1704,8 +1710,10 @@ function renderFornRows(){
       produtosHtml += `
         <div class="produto-row">
           <input type="text" placeholder="Descrição do produto" class="produto-desc-input" value="${escapeHtml(p.descricao || '')}">
+          ${p.obsFornecedor ? `<div class="produto-obs">💬 Fornecedor: ${escapeHtml(p.obsFornecedor)}</div>` : ''}
           <div class="produto-grid">
             <input type="text" placeholder="Qtd" class="produto-qtd-input" value="${escapeHtml(p.quantidade || '')}">
+            <input type="text" placeholder="Un" class="produto-un-input" value="${escapeHtml(p.unidade || '')}">
             <input type="text" placeholder="Valor unitário R$" class="produto-vunit-input" value="${escapeHtml(p.valorUnitario || '')}">
             <div class="produto-subtotal">R$ ${formatMoney(sub)}</div>
             <button type="button" class="remove-produto" title="Remover produto">×</button>
@@ -1755,6 +1763,9 @@ function renderFornRows(){
 
     div.querySelectorAll('.produto-desc-input').forEach((inp, pIdx) => {
       inp.addEventListener('input', (e) => { row.produtos[pIdx].descricao = e.target.value; });
+    });
+    div.querySelectorAll('.produto-un-input').forEach((inp, pIdx) => {
+      inp.addEventListener('input', (e) => { row.produtos[pIdx].unidade = e.target.value; });
     });
     div.querySelectorAll('.produto-qtd-input').forEach((inp, pIdx) => {
       inp.addEventListener('input', (e) => {
@@ -1812,7 +1823,7 @@ function renderFornRows(){
         const temDados = outros.some(r => (r.produtos || []).some(p => (p.descricao || '').trim() || (p.quantidade || '').toString().trim() || (p.valorUnitario || '').toString().trim()));
         if(temDados && !confirm('Os outros fornecedores já têm produtos preenchidos. Substituir pela lista do primeiro fornecedor? (os valores unitários deles serão apagados)')) return;
         outros.forEach(r => {
-          r.produtos = base.map(p => ({id: uid('p'), descricao: p.descricao || '', quantidade: p.quantidade || '', valorUnitario: ''}));
+          r.produtos = base.map(p => ({id: uid('p'), descricao: p.descricao || '', quantidade: p.quantidade || '', unidade: p.unidade || '', valorUnitario: ''}));
         });
         renderFornRows();
       });
@@ -1873,7 +1884,7 @@ function imprimirCotacao(id){
       const desc = produtoDesconto(prod);
       const sub = produtoSubtotal(prod);
       mapa[chave].ofertas.push({
-        forn: f, quantidade: prod.quantidade || '', valorUnitario: prod.valorUnitario || '',
+        forn: f, quantidade: qtdU(prod), valorUnitario: prod.valorUnitario || '',
         desconto: desc, fechado: !!prod.fechado,
         subtotal: sub, unit: cotou ? (qtd > 0 ? sub / qtd : vUnit) : null
       });
@@ -1956,7 +1967,7 @@ function gerarRequisicaoCotacao(id){
     const nome = (prod.descricao || '').trim() || c.produto;
     const chave = nome.toLowerCase().replace(/\s+/g, ' ');
     if(!mapa[chave]){ mapa[chave] = { nome, quantidade: '' }; lista.push(mapa[chave]); }
-    if(!mapa[chave].quantidade && (prod.quantidade || '').toString().trim()) mapa[chave].quantidade = prod.quantidade;
+    if(!mapa[chave].quantidade && (prod.quantidade || '').toString().trim()) mapa[chave].quantidade = qtdU(prod);
   }));
   if(!lista.length) lista.push({ nome: c.produto, quantidade: '' });
 
@@ -2010,7 +2021,7 @@ function gerarListaEstoque(id){
   const itens = fc.itens.slice().sort((a, b) => a.forn.nome.localeCompare(b.forn.nome));
   const linhas = itens.map(it => `<tr>
     <td>${escapeHtml(it.prod.descricao || c.produto)}</td>
-    <td>${escapeHtml(it.prod.quantidade || '—')}</td>
+    <td>${escapeHtml(qtdU(it.prod) || '—')}</td>
     <td>${escapeHtml(it.forn.nome)}</td>
     <td style="width:70px; text-align:center;">☐</td>
   </tr>`).join('');
@@ -2053,7 +2064,7 @@ function gerarPedidoCompra(id){
       total += sub;
       return `<tr>
         <td>${escapeHtml(prod.descricao || c.produto)}</td>
-        <td>${escapeHtml(prod.quantidade || '—')}</td>
+        <td>${escapeHtml(qtdU(prod) || '—')}</td>
         <td>${prod.valorUnitario ? 'R$ ' + escapeHtml(prod.valorUnitario) : '—'}</td>
         ${temDesc ? `<td>${desc > 0 ? '- R$ ' + formatMoney(desc) : '—'}</td>` : ''}
         <td>R$ ${formatMoney(sub)}</td>
@@ -2149,6 +2160,8 @@ document.getElementById('btn-save').addEventListener('click', () => {
           id: p.id || uid('p'),
           descricao: (p.descricao || '').trim(),
           quantidade: (p.quantidade || '').toString().trim(),
+          unidade: (p.unidade || '').toString().trim(),
+          obsFornecedor: (p.obsFornecedor || '').toString().trim(),
           valorUnitario: (p.valorUnitario || '').toString().trim(),
           desconto: (p.desconto || '').toString().trim(),
           fechado: !!p.fechado
@@ -2525,7 +2538,7 @@ function rqAbrirDetalhe(id){
       document.getElementById('f-categoria').value = r.categoria || '';
       document.getElementById('f-produto').value = (r.equipamento ? r.equipamento + ' — ' : '') + (itens[0] ? itens[0].produto : 'Requisição') + (itens.length > 1 ? ' (+' + (itens.length - 1) + ' itens)' : '');
       fornRows = [{ nome:'', preco:'', condicoes:'', fechado:false,
-        produtos: itens.map(i => ({ id: uid('p'), descricao: i.produto, quantidade: i.quantidade, valorUnitario: '' })) }];
+        produtos: itens.map(i => ({ id: uid('p'), descricao: i.produto, quantidade: i.quantidade, unidade: (i.unidade || '').trim(), valorUnitario: '' })) }];
       renderFornRows();
       if(['nova','recebida'].includes(r.status || 'nova')){
         try{ await updateDoc(doc(db, 'requisicoes', id), { status: 'cotacao', atualizadoEm: new Date().toISOString() }); }catch(e){ console.error(e); }
@@ -2593,6 +2606,8 @@ async function linkParaEnviar(token){
   }catch(e){ console.warn('Encurtador indisponível, usando o link completo', e); }
   return longo;
 }
+function hojeISO(){ const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function conviteExpirado(cv){ return !!(cv && cv.prazoResposta && hojeISO() > cv.prazoResposta); }
 function conviteDe(c, f){ return convites.find(v => v.cotacaoId === c.id && v.fornecedorId === f.id); }
 
 function itensParaConvite(c){
@@ -2601,11 +2616,11 @@ function itensParaConvite(c){
   (c.fornecedores || []).forEach(f => getProdutosForPrint(f).forEach(prod => {
     const nome = (prod.descricao || '').trim() || c.produto;
     const k = normProd(nome);
-    if(!mapa[k]){ mapa[k] = { descricao: nome, quantidade: '' }; lista.push(mapa[k]); }
-    if(!mapa[k].quantidade && (prod.quantidade || '').toString().trim()) mapa[k].quantidade = prod.quantidade;
+    if(!mapa[k]){ mapa[k] = { descricao: nome, quantidade: '', unidade: '' }; lista.push(mapa[k]); }
+    if(!mapa[k].quantidade && (prod.quantidade || '').toString().trim()){ mapa[k].quantidade = prod.quantidade; mapa[k].unidade = (prod.unidade || '').trim(); }
   }));
   if(!lista.length) lista.push({ descricao: c.produto, quantidade: '' });
-  return lista.map((it, i) => ({ id: 'i' + (i + 1), descricao: it.descricao, quantidade: it.quantidade }));
+  return lista.map((it, i) => ({ id: 'i' + (i + 1), descricao: it.descricao, quantidade: it.quantidade, unidade: it.unidade || '' }));
 }
 
 async function criarConvite(c, f){
@@ -2613,7 +2628,7 @@ async function criarConvite(c, f){
   const token = novoToken();
   await setDoc(doc(db, 'convites', token), {
     cotacaoId: c.id, fornecedorId: f.id, fornecedorNome: f.nome, titulo: c.produto,
-    empresa: EMPRESA_NOME || '', prazoResposta: c.prazo || '', itens: itensParaConvite(c),
+    empresa: EMPRESA_NOME || '', prazoResposta: (document.getElementById('cv-prazo').value || c.prazo || ''), itens: itensParaConvite(c),
     status: 'aberto', resposta: null, importado: false, criadoEm: new Date().toISOString()
   });
   return token;
@@ -2652,6 +2667,9 @@ async function copiarTexto(t){
 
 function abrirConvites(id){
   conviteCotacaoId = id;
+  const c0 = cotacoes.find(x => x.id === id);
+  const ex = c0 ? convites.find(v => v.cotacaoId === id && v.prazoResposta) : null;
+  document.getElementById('cv-prazo').value = (ex && ex.prazoResposta) || (c0 && c0.prazo) || '';
   renderConvitesModal();
   document.getElementById('cv-overlay').classList.add('open');
 }
@@ -2669,7 +2687,7 @@ function renderConvitesModal(){
     let botoes = `<button class="primary" data-act="whats" data-idx="${idx}">📲 Enviar por WhatsApp</button>
       <button class="ghost" data-act="copiar" data-idx="${idx}">🔗 Copiar link</button>`;
     if(cv && cv.status === 'aberto'){
-      chip = '<span class="cv-chip aguardando">Aguardando resposta</span>';
+      chip = conviteExpirado(cv) ? '<span class="cv-chip" style="color:var(--danger);">Expirado em ' + formatDate(cv.prazoResposta) + '</span>' : '<span class="cv-chip aguardando">Aguardando resposta' + (cv.prazoResposta ? ' · até ' + formatDate(cv.prazoResposta) : '') + '</span>';
       botoes = `<button class="primary" data-act="whats" data-idx="${idx}">📲 Reenviar</button>
         <button class="ghost" data-act="copiar" data-idx="${idx}">🔗 Copiar link</button>
         <button class="ghost" data-act="cancelar" data-idx="${idx}">Cancelar link</button>`;
@@ -2678,7 +2696,7 @@ function renderConvitesModal(){
       const r = cv.resposta || {};
       const linhas = (cv.itens || []).map(it => {
         const x = (r.itens || []).find(y => y.id === it.id);
-        return `${escapeHtml(it.descricao)} (${escapeHtml(it.quantidade || '—')}): <strong>${x && x.valorUnitario ? 'R$ ' + escapeHtml(x.valorUnitario) : '—'}</strong>`;
+        return `${escapeHtml(it.descricao)} (${escapeHtml(qtdU(it) || '—')}): <strong>${x && x.valorUnitario ? 'R$ ' + escapeHtml(x.valorUnitario) : '—'}</strong>${x && x.observacao ? '<br><em style="color:var(--warn);">💬 ' + escapeHtml(x.observacao) + '</em>' : ''}`;
       }).join('<br>');
       corpo = `<div class="cv-resp">${linhas}
         ${r.prazoEntrega ? '<br>Prazo de entrega: <strong>' + escapeHtml(r.prazoEntrega) + '</strong>' : ''}
@@ -2728,6 +2746,17 @@ document.getElementById('cv-list').addEventListener('click', async (e) => {
     alert('Não foi possível concluir. Confirme se as regras do Firebase foram atualizadas (coleção "convites").');
   }
 });
+document.getElementById('cv-prazo').addEventListener('change', async (e) => {
+  const c = cotacoes.find(x => x.id === conviteCotacaoId);
+  if(!c) return;
+  const novo = e.target.value || '';
+  try{
+    for(const cv of convites.filter(v => v.cotacaoId === c.id && v.status === 'aberto')){
+      await updateDoc(doc(db, 'convites', cv.id), { prazoResposta: novo });
+    }
+    renderConvitesModal();
+  }catch(err){ console.error(err); alert('Não foi possível atualizar o prazo dos links.'); }
+});
 document.getElementById('cv-close').addEventListener('click', () => document.getElementById('cv-overlay').classList.remove('open'));
 document.getElementById('cv-overlay').addEventListener('click', (e) => { if(e.target === document.getElementById('cv-overlay')) document.getElementById('cv-overlay').classList.remove('open'); });
 
@@ -2735,19 +2764,27 @@ async function importarResposta(c, f, cv){
   const r = cv.resposta;
   if(!r) return;
   if(!f.produtos || !f.produtos.length){
-    f.produtos = getProdutosForPrint(f).map(p => ({ id: uid('p'), descricao: p.descricao || '', quantidade: p.quantidade || '', valorUnitario: p.valorUnitario || '', desconto: '', fechado: false }));
+    f.produtos = getProdutosForPrint(f).map(p => ({ id: uid('p'), descricao: p.descricao || '', quantidade: p.quantidade || '', unidade: p.unidade || '', valorUnitario: p.valorUnitario || '', desconto: '', fechado: false }));
   }
   (cv.itens || []).forEach(it => {
     const resp = (r.itens || []).find(x => x.id === it.id);
-    if(!resp || !(resp.valorUnitario || '').toString().trim()) return;
+    if(!resp || !(resp.valorUnitario || '').toString().trim()){
+      if(resp && (resp.observacao || '').toString().trim()){
+        const p0 = f.produtos.find(p => normProd(p.descricao || c.produto) === normProd(it.descricao));
+        if(p0) p0.obsFornecedor = resp.observacao.toString().trim();
+      }
+      return;
+    }
     const k = normProd(it.descricao);
     let prod = f.produtos.find(p => normProd(p.descricao || c.produto) === k);
     if(!prod){
-      prod = { id: uid('p'), descricao: it.descricao, quantidade: it.quantidade || '', valorUnitario: '', desconto: '', fechado: false };
+      prod = { id: uid('p'), descricao: it.descricao, quantidade: it.quantidade || '', unidade: it.unidade || '', valorUnitario: '', desconto: '', fechado: false };
       f.produtos.push(prod);
     }
     prod.valorUnitario = resp.valorUnitario;
     if(!(prod.quantidade || '').toString().trim()) prod.quantidade = it.quantidade || '';
+    if(!(prod.unidade || '').toString().trim()) prod.unidade = it.unidade || '';
+    prod.obsFornecedor = (resp.observacao || '').toString().trim();
   });
   f.preco = formatMoney(f.produtos.reduce((sum, p) => sum + produtoSubtotal(p), 0));
   const partes = [];
@@ -2783,9 +2820,14 @@ async function iniciarModoFornecedor(){
     const r = cv.resposta;
     const linhas = (cv.itens || []).map(it => {
       const x = (r.itens || []).find(y => y.id === it.id);
-      return `<div class="sp-item"><div class="sp-nome">${escapeHtml(it.descricao)}</div><div class="sp-qtd">Quantidade: ${escapeHtml(it.quantidade || '—')}</div><div>Seu valor unitário: <strong>${x && x.valorUnitario ? 'R$ ' + escapeHtml(x.valorUnitario) : '—'}</strong></div></div>`;
+      return `<div class="sp-item"><div class="sp-nome">${escapeHtml(it.descricao)}</div><div class="sp-qtd">Quantidade: ${escapeHtml(qtdU(it) || '—')}</div><div>Seu valor unitário: <strong>${x && x.valorUnitario ? 'R$ ' + escapeHtml(x.valorUnitario) : '—'}</strong></div></div>`;
     }).join('');
     el.innerHTML = cab + `<div class="sp-item" style="border-color:var(--ok);"><strong style="color:var(--ok);">✔ Cotação enviada. Obrigado!</strong><div class="sp-note" style="margin-bottom:0;">O comprador já recebeu os seus valores. Se precisar corrigir algo, peça a ele para reabrir o link.</div></div>` + linhas;
+    return;
+  }
+
+  if(conviteExpirado(cv)){
+    el.innerHTML = cab + '<div class="sp-item" style="border-color:var(--danger);"><strong style="color:var(--danger);">⏰ Cotação expirada</strong><div class="sp-note" style="margin-bottom:0;">O prazo para responder terminou em ' + formatDate(cv.prazoResposta) + '. Se ainda tiver interesse, fale com o comprador para reabrir.</div></div>';
     return;
   }
 
@@ -2793,11 +2835,12 @@ async function iniciarModoFornecedor(){
     ${(cv.itens || []).map((it, i) => `
       <div class="sp-item" data-id="${escapeHtml(it.id)}">
         <div class="sp-nome">${escapeHtml(it.descricao)}</div>
-        <div class="sp-qtd">Quantidade: ${escapeHtml(it.quantidade || '—')}</div>
+        <div class="sp-qtd">Quantidade: ${escapeHtml(qtdU(it) || '—')}</div>
         <div class="sp-row">
           <input class="sp-input sp-vu" inputmode="decimal" placeholder="Valor unitário (R$)">
           <div class="sp-sub">R$ 0,00</div>
         </div>
+        <input class="sp-input sp-obs-item" placeholder="Observação ou sugestão de produto similar (opcional)">
       </div>`).join('')}
     <div class="sp-total"><span>Total</span><span id="sp-total-v">R$ 0,00</span></div>
     <div class="field"><label>Prazo de entrega</label><input class="sp-input" id="sp-prazo" placeholder="Ex: 5 dias úteis"></div>
@@ -2821,8 +2864,9 @@ async function iniciarModoFornecedor(){
   el.querySelectorAll('.sp-vu').forEach(i => i.addEventListener('input', recalc));
 
   document.getElementById('sp-enviar').addEventListener('click', async () => {
-    const itens = [...el.querySelectorAll('.sp-item[data-id]')].map(box => ({ id: box.dataset.id, valorUnitario: box.querySelector('.sp-vu').value.trim() }));
+    const itens = [...el.querySelectorAll('.sp-item[data-id]')].map(box => ({ id: box.dataset.id, valorUnitario: box.querySelector('.sp-vu').value.trim(), observacao: box.querySelector('.sp-obs-item').value.trim() }));
     if(!itens.some(i => parsePrice(i.valorUnitario) !== null && i.valorUnitario)){ alert('Informe o valor de pelo menos um item.'); return; }
+    if(conviteExpirado(cv)){ alert('Este link expirou. Peça um novo prazo ao comprador.'); iniciarModoFornecedor(); return; }
     if(!confirm('Enviar a cotação? Depois de enviada, só o comprador pode reabrir para correção.')) return;
     const btn = document.getElementById('sp-enviar');
     btn.disabled = true; btn.textContent = 'Enviando...';
@@ -2944,7 +2988,7 @@ document.getElementById('btn-arquivar').addEventListener('click', async () => {
   aprovadas.forEach(c => {
     fechamentoCotacao(c).itens.forEach(it => {
       itens.push([c.produto, c.dataAprovacaoISO ? formatDate(c.dataAprovacaoISO) : '', it.forn.nome,
-        it.prod.descricao || c.produto, it.prod.quantidade || '', it.prod.valorUnitario || '',
+        it.prod.descricao || c.produto, qtdU(it.prod), it.prod.valorUnitario || '',
         Number(produtoDesconto(it.prod).toFixed(2)), Number(produtoSubtotal(it.prod).toFixed(2))]);
     });
   });
