@@ -255,6 +255,15 @@
   .forn-edit-row .produto-row input[type="text"]{margin-bottom:6px;}
   .forn-edit-row .produto-row .produto-grid{display:grid; grid-template-columns:60px 46px 1fr 90px 22px; gap:6px; align-items:center;}
   .produto-obs{font-size:11.5px; color:var(--warn); background:var(--panel-2); border:1px dashed var(--line); border-radius:6px; padding:6px 8px; margin-bottom:6px;}
+  .sp-subst-btn{background:none; border:1px dashed var(--accent-dim); color:var(--accent); border-radius:8px; padding:10px 12px; font-size:14px; width:100%; margin-top:8px; cursor:pointer; min-height:44px;}
+  .sp-subst-panel{background:var(--panel-2); border:1px solid var(--line); border-radius:8px; padding:10px; margin-top:8px;}
+  .sp-subst-panel label{display:block; font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin:8px 0 4px;}
+  .sp-subst-panel .sp-input{margin-bottom:2px;}
+  .sp-subst-actions{display:flex; gap:8px; margin-top:10px;}
+  .sp-subst-actions button{flex:1; min-height:44px;}
+  .sp-sub-card{border-color:var(--accent-dim) !important; margin-left:10px;}
+  .sp-sub-tag{font-size:11px; font-weight:700; color:var(--accent); text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px;}
+  .sp-sub-rm{background:none; border:none; color:var(--muted); font-size:13px; cursor:pointer; margin-top:8px; padding:6px 0;}
   .sp-input.sp-obs-item{margin-top:8px; font-size:14px; padding:9px 12px;}
   .forn-edit-row .produto-row .produto-subtotal{
     background:var(--bg); border:1px solid var(--line); color:var(--accent); font-weight:700;
@@ -2162,6 +2171,7 @@ document.getElementById('btn-save').addEventListener('click', () => {
           quantidade: (p.quantidade || '').toString().trim(),
           unidade: (p.unidade || '').toString().trim(),
           obsFornecedor: (p.obsFornecedor || '').toString().trim(),
+          substitutoDe: (p.substitutoDe || '').toString().trim(),
           valorUnitario: (p.valorUnitario || '').toString().trim(),
           desconto: (p.desconto || '').toString().trim(),
           fechado: !!p.fechado
@@ -2697,7 +2707,10 @@ function renderConvitesModal(){
       const linhas = (cv.itens || []).map(it => {
         const x = (r.itens || []).find(y => y.id === it.id);
         return `${escapeHtml(it.descricao)} (${escapeHtml(qtdU(it) || '—')}): <strong>${x && x.valorUnitario ? 'R$ ' + escapeHtml(x.valorUnitario) : '—'}</strong>${x && x.observacao ? '<br><em style="color:var(--warn);">💬 ' + escapeHtml(x.observacao) + '</em>' : ''}`;
-      }).join('<br>');
+      }).join('<br>') + (r.itens || []).filter(x => x.substitutoDe).map(x => {
+        const o = (cv.itens || []).find(y => y.id === x.substitutoDe) || {};
+        return `<br>🔄 <strong>Substitui ${escapeHtml(o.descricao || '')}</strong> → ${escapeHtml(x.descricao || '')} (${escapeHtml(qtdU(o) || '—')}): <strong>${x.valorUnitario ? 'R$ ' + escapeHtml(x.valorUnitario) : '—'}</strong>${x.observacao ? '<br><em style="color:var(--warn);">💬 ' + escapeHtml(x.observacao) + '</em>' : ''}`;
+      }).join('');
       corpo = `<div class="cv-resp">${linhas}
         ${r.prazoEntrega ? '<br>Prazo de entrega: <strong>' + escapeHtml(r.prazoEntrega) + '</strong>' : ''}
         ${r.condicoes ? '<br>Pagamento/condições: <strong>' + escapeHtml(r.condicoes) + '</strong>' : ''}
@@ -2786,6 +2799,19 @@ async function importarResposta(c, f, cv){
     if(!(prod.unidade || '').toString().trim()) prod.unidade = it.unidade || '';
     prod.obsFornecedor = (resp.observacao || '').toString().trim();
   });
+  (r.itens || []).filter(x => x.substitutoDe && (x.descricao || '').trim()).forEach(x => {
+    const o = (cv.itens || []).find(y => y.id === x.substitutoDe);
+    if(!o) return;
+    const k = normProd(x.descricao);
+    let prod = f.produtos.find(p => p.substitutoDe && normProd(p.descricao) === k && normProd(p.substitutoDe) === normProd(o.descricao));
+    if(!prod){
+      prod = { id: uid('p'), descricao: x.descricao.trim(), quantidade: o.quantidade || '', unidade: o.unidade || '', valorUnitario: '', desconto: '', fechado: false };
+      f.produtos.push(prod);
+    }
+    prod.substitutoDe = o.descricao;
+    prod.valorUnitario = (x.valorUnitario || '').toString();
+    prod.obsFornecedor = ('Substituto de "' + o.descricao + '"' + (x.observacao ? ' — ' + x.observacao : ''));
+  });
   f.preco = formatMoney(f.produtos.reduce((sum, p) => sum + produtoSubtotal(p), 0));
   const partes = [];
   if(r.prazoEntrega) partes.push('Prazo de entrega: ' + r.prazoEntrega);
@@ -2821,6 +2847,9 @@ async function iniciarModoFornecedor(){
     const linhas = (cv.itens || []).map(it => {
       const x = (r.itens || []).find(y => y.id === it.id);
       return `<div class="sp-item"><div class="sp-nome">${escapeHtml(it.descricao)}</div><div class="sp-qtd">Quantidade: ${escapeHtml(qtdU(it) || '—')}</div><div>Seu valor unitário: <strong>${x && x.valorUnitario ? 'R$ ' + escapeHtml(x.valorUnitario) : '—'}</strong></div></div>`;
+    }).join('') + (r.itens || []).filter(x => x.substitutoDe).map(x => {
+      const o = (cv.itens || []).find(y => y.id === x.substitutoDe) || {};
+      return `<div class="sp-item sp-sub-card"><div class="sp-sub-tag">🔄 Substitui: ${escapeHtml(o.descricao || '')}</div><div class="sp-nome">${escapeHtml(x.descricao || '')}</div><div class="sp-qtd">Quantidade: ${escapeHtml(qtdU(o) || '—')}</div><div>Seu valor unitário: <strong>${x.valorUnitario ? 'R$ ' + escapeHtml(x.valorUnitario) : '—'}</strong></div></div>`;
     }).join('');
     el.innerHTML = cab + `<div class="sp-item" style="border-color:var(--ok);"><strong style="color:var(--ok);">✔ Cotação enviada. Obrigado!</strong><div class="sp-note" style="margin-bottom:0;">O comprador já recebeu os seus valores. Se precisar corrigir algo, peça a ele para reabrir o link.</div></div>` + linhas;
     return;
@@ -2841,6 +2870,7 @@ async function iniciarModoFornecedor(){
           <div class="sp-sub">R$ 0,00</div>
         </div>
         <input class="sp-input sp-obs-item" placeholder="Observação ou sugestão de produto similar (opcional)">
+        <button type="button" class="sp-subst-btn" data-id="${escapeHtml(it.id)}">🔄 Substituir produto</button>
       </div>`).join('')}
     <div class="sp-total"><span>Total</span><span id="sp-total-v">R$ 0,00</span></div>
     <div class="field"><label>Prazo de entrega</label><input class="sp-input" id="sp-prazo" placeholder="Ex: 5 dias úteis"></div>
@@ -2855,7 +2885,7 @@ async function iniciarModoFornecedor(){
     let total = 0;
     el.querySelectorAll('.sp-item[data-id]').forEach(box => {
       const v = parsePrice(box.querySelector('.sp-vu').value) || 0;
-      const sub = v * qtdDe(box.dataset.id);
+      const sub = v * qtdDe(box.dataset.origem || box.dataset.id);
       total += sub;
       box.querySelector('.sp-sub').textContent = 'R$ ' + formatMoney(sub);
     });
@@ -2863,8 +2893,64 @@ async function iniciarModoFornecedor(){
   };
   el.querySelectorAll('.sp-vu').forEach(i => i.addEventListener('input', recalc));
 
+  // ---- Substituir produto ----
+  let subSeq = 0;
+  const fecharPainel = () => { const p = el.querySelector('.sp-subst-panel'); if(p) p.remove(); };
+  el.addEventListener('click', (e) => {
+    const rm = e.target.closest('.sp-sub-rm');
+    if(rm){ rm.closest('.sp-sub-card').remove(); recalc(); return; }
+    const btn = e.target.closest('.sp-subst-btn');
+    if(!btn) return;
+    fecharPainel();
+    const panel = document.createElement('div');
+    panel.className = 'sp-subst-panel';
+    panel.innerHTML = `
+      <label>Qual produto da cotação será substituído?</label>
+      <select class="sp-input sp-subst-orig">${(cv.itens || []).map(it => `<option value="${escapeHtml(it.id)}" ${it.id === btn.dataset.id ? 'selected' : ''}>${escapeHtml(it.descricao)} (${escapeHtml(qtdU(it) || '—')})</option>`).join('')}</select>
+      <label>Produto que você indica no lugar</label>
+      <input class="sp-input sp-subst-nome" placeholder="Nome / descrição / marca do produto substituto">
+      <div class="sp-note" style="margin:8px 0 0;">A quantidade será a mesma da cotação original.</div>
+      <div class="sp-subst-actions"><button type="button" class="ghost sp-subst-cancel">Cancelar</button><button type="button" class="primary sp-subst-add">Adicionar substituto</button></div>`;
+    btn.parentNode.appendChild(panel);
+    panel.querySelector('.sp-subst-nome').focus();
+    panel.querySelector('.sp-subst-cancel').addEventListener('click', fecharPainel);
+    panel.querySelector('.sp-subst-add').addEventListener('click', () => {
+      const nome = panel.querySelector('.sp-subst-nome').value.trim();
+      if(!nome){ alert('Informe o produto que você indica no lugar.'); return; }
+      const origId = panel.querySelector('.sp-subst-orig').value;
+      const orig = (cv.itens || []).find(x => x.id === origId);
+      if(!orig) return;
+      subSeq++;
+      const card = document.createElement('div');
+      card.className = 'sp-item sp-sub-card';
+      card.dataset.id = 's' + subSeq;
+      card.dataset.origem = origId;
+      card.innerHTML = `
+        <div class="sp-sub-tag">🔄 Substitui: ${escapeHtml(orig.descricao)}</div>
+        <input class="sp-input sp-sub-nome" value="${escapeHtml(nome)}" placeholder="Produto substituto">
+        <div class="sp-qtd">Quantidade: ${escapeHtml(qtdU(orig) || '—')} (igual à cotação original)</div>
+        <div class="sp-row">
+          <input class="sp-input sp-vu" inputmode="decimal" placeholder="Valor unitário (R$)">
+          <div class="sp-sub">R$ 0,00</div>
+        </div>
+        <input class="sp-input sp-obs-item" placeholder="Observação (opcional)">
+        <button type="button" class="sp-sub-rm">✕ Remover substituto</button>`;
+      let ref = el.querySelector('.sp-item[data-id="' + origId + '"]');
+      while(ref.nextElementSibling && ref.nextElementSibling.classList.contains('sp-sub-card') && ref.nextElementSibling.dataset.origem === origId) ref = ref.nextElementSibling;
+      ref.after(card);
+      card.querySelector('.sp-vu').addEventListener('input', recalc);
+      fecharPainel();
+      card.querySelector('.sp-vu').focus();
+    });
+  });
+
   document.getElementById('sp-enviar').addEventListener('click', async () => {
-    const itens = [...el.querySelectorAll('.sp-item[data-id]')].map(box => ({ id: box.dataset.id, valorUnitario: box.querySelector('.sp-vu').value.trim(), observacao: box.querySelector('.sp-obs-item').value.trim() }));
+    const itens = [...el.querySelectorAll('.sp-item[data-id]')].map(box => {
+      const o = { id: box.dataset.id, valorUnitario: box.querySelector('.sp-vu').value.trim(), observacao: box.querySelector('.sp-obs-item').value.trim() };
+      if(box.dataset.origem){ o.substitutoDe = box.dataset.origem; o.descricao = box.querySelector('.sp-sub-nome').value.trim(); }
+      return o;
+    });
+    if(itens.some(i => i.substitutoDe && !i.descricao)){ alert('Informe o nome do produto substituto (ou remova-o).'); return; }
     if(!itens.some(i => parsePrice(i.valorUnitario) !== null && i.valorUnitario)){ alert('Informe o valor de pelo menos um item.'); return; }
     if(conviteExpirado(cv)){ alert('Este link expirou. Peça um novo prazo ao comprador.'); iniciarModoFornecedor(); return; }
     if(!confirm('Enviar a cotação? Depois de enviada, só o comprador pode reabrir para correção.')) return;
